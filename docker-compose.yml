@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: proyecto-uni-pos-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - app-network
+
+  # Uncomment and configure this service when you're ready to add your NestJS app
+  # app:
+  #   build: .
+  #   container_name: proyecto-uni-pos-app
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - NODE_ENV=development
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #   depends_on:
+  #     - redis
+  #   networks:
+  #     - app-network
+
+volumes:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge

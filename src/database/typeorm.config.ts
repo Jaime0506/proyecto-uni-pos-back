@@ -5,12 +5,7 @@ import {
 } from '@nestjs/typeorm';
 
 export const typeOrmConfig: TypeOrmModuleAsyncOptions = {
-	imports: [
-		ConfigModule.forRoot({
-			isGlobal: true,
-			envFilePath: '.env',
-		}),
-	],
+	imports: [ConfigModule.forRoot({ isGlobal: true })],
 	inject: [ConfigService],
 	useFactory: (config: ConfigService): TypeOrmModuleOptions => ({
 		type: 'postgres',
