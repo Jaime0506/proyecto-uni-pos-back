@@ -8,10 +8,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, IsNull, MoreThanOrEqual } from 'typeorm';
 import { User } from '../core/users/user.entity';
 import { Session } from './entities/session.entity';
-import * as bcrypt from 'bcrypt';
+import { compareSync } from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import { addFromNow } from 'src/utils/jwt.utilities';
+import { processTransaction } from '../database/transactions';
+import { RegisterDto } from './dtos/register.dto';
+import { createUserName, hashPassword } from 'src/utils/auth.utilities';
+import { AvailabilityDto } from './dtos/availability.dto';
 
 @Injectable()
 export class AuthService {
@@ -24,7 +29,7 @@ export class AuthService {
 	) {}
 
 	async login(
-		usernameOrEmail: string,
+		userName: string,
 		password: string,
 		ip?: string,
 		userAgent?: string,
@@ -32,16 +37,30 @@ export class AuthService {
 		companyId?: number,
 	) {
 		const user = await this.users.findOne({
-			where: [{ username: usernameOrEmail }, { email: usernameOrEmail }],
+			where: [{ username: userName }],
 		});
 
-		if (!user || !user.isActive) {
+		if (!user) {
 			throw new UnauthorizedException('Credenciales inválidas');
 		}
 
-		const ok = await bcrypt.compare(password, user.password);
+		if (!user.isActive) {
+			throw new UnauthorizedException(
+				'Usuario inactivo, contacte a un administrador',
+			);
+		}
+		const ok = compareSync(password, user.password);
+
 		if (!ok) {
 			throw new UnauthorizedException('Credenciales inválidas');
+		}
+
+		const session = await this.sessions.findOne({
+			where: { user: { id: user.id } },
+		});
+
+		if (session) {
+			throw new UnauthorizedException('Usuario ya tiene una sesión activa');
 		}
 
 		const jti = randomUUID();
@@ -49,8 +68,8 @@ export class AuthService {
 		const expiresAt = addFromNow(refreshTtl);
 
 		// transacción: crear sesión y firmar tokens
-		return await this.dataSource.transaction(async (trx) => {
-			const sessRepo = trx.getRepository(Session);
+		return await processTransaction(this.dataSource, async (queryRunner) => {
+			const sessRepo = queryRunner.manager.getRepository(Session);
 			const session = sessRepo.create({
 				user,
 				jtiAccess: jti,
@@ -63,13 +82,24 @@ export class AuthService {
 			await sessRepo.save(session);
 
 			const accessToken = this.jwt.sign(
-				{ sub: user.id, jti, username: user.username },
+				{
+					sub: user.id,
+					jti,
+					username: user.username,
+					isSuperRoot: user.isSuperRoot,
+				},
 				{ expiresIn: this.cfg.get('JWT_ACCESS_TTL') || '15m' },
 			);
 
 			// refresh con mismo jti pero TTL largo
 			const refreshToken = this.jwt.sign(
-				{ sub: user.id, jti, username: user.username, typ: 'refresh' },
+				{
+					sub: user.id,
+					jti,
+					username: user.username,
+					isSuperRoot: user.isSuperRoot,
+					typ: 'refresh',
+				},
 				{ expiresIn: refreshTtl },
 			);
 
@@ -83,9 +113,77 @@ export class AuthService {
 					email: user.email,
 					firstName: user.firstName,
 					lastName: user.lastName,
+					isSuperRoot: user.isSuperRoot,
 				},
 			};
 		});
+	}
+
+	async register(dto: RegisterDto) {
+		const { firstName, lastName, email, nationalId, password, phoneNumber } =
+			dto;
+
+		// verificar si el usuario ya existe x email o nationalId
+		const user = await this.users.findOne({ where: { email, nationalId } });
+		if (user) {
+			throw new BadRequestException('El usuario ya existe');
+		}
+
+		// crear el username
+		const username = createUserName(firstName, lastName, nationalId);
+
+		// crear el password
+		const hashedPassword = await hashPassword(password);
+
+		// crear el usuario
+		const newUser = this.users.create({
+			username,
+			firstName,
+			lastName,
+			email,
+			nationalId,
+			password: hashedPassword,
+			phoneNumber,
+		});
+
+		await this.users.save(newUser);
+
+		return {
+			ok: true,
+			message: 'Usuario creado correctamente',
+		};
+	}
+
+	async availability(dto: AvailabilityDto) {
+		const { username, email, nationalId } = dto;
+
+		const existingByUsername = await this.users.findOne({
+			where: { username },
+		});
+		if (existingByUsername) {
+			throw new BadRequestException('El nombre de usuario ya está en uso');
+		}
+
+		const existingByEmail = await this.users.findOne({ where: { email } });
+
+		if (existingByEmail) {
+			throw new BadRequestException('El correo electrónico ya está en uso');
+		}
+
+		const existingByNationalId = await this.users.findOne({
+			where: { nationalId },
+		});
+
+		if (existingByNationalId) {
+			throw new BadRequestException(
+				'El número de identificación ya está en uso',
+			);
+		}
+
+		return {
+			ok: true,
+			message: 'Usuario disponible',
+		};
 	}
 
 	async refresh(refreshToken: string) {
@@ -119,6 +217,7 @@ export class AuthService {
 				sub: session.user.id,
 				jti: session.jtiAccess,
 				username: session.user.username,
+				isSuperRoot: session.user.isSuperRoot,
 			},
 			{ expiresIn: this.cfg.get('JWT_ACCESS_TTL') || '15m' },
 		);
@@ -136,36 +235,14 @@ export class AuthService {
 
 	async me(userId: string) {
 		const user = await this.users.findOne({ where: { id: userId } });
-		if (!user) throw new UnauthorizedException();
+		if (!user) throw new UnauthorizedException('Usuario no encontrado');
 		return {
 			id: user.id,
 			username: user.username,
 			email: user.email,
 			firstName: user.firstName,
 			lastName: user.lastName,
+			isSuperRoot: user.isSuperRoot,
 		};
 	}
-}
-
-// Parse TTL tipo '15m', '7d', '3600s'
-function addFromNow(ttl: string): Date {
-	const now = Date.now();
-	const m = /^(\d+)([smhd])$/.exec(ttl);
-	let ms: number;
-	if (m) {
-		const val = parseInt(m[1], 10);
-		const unit = m[2];
-		ms =
-			unit === 's'
-				? val * 1000
-				: unit === 'm'
-					? val * 60_000
-					: unit === 'h'
-						? val * 3_600_000
-						: /* d */ val * 86_400_000;
-	} else {
-		// fallback (ej: '900s' o '15m' inválido): 7 días
-		ms = 7 * 86_400_000;
-	}
-	return new Date(now + ms);
 }

@@ -14,6 +14,8 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dtos/login.dto';
 import { RefreshDto } from './dtos/refresh.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RegisterDto } from './dtos/register.dto';
+import { AvailabilityDto } from './dtos/availability.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -24,13 +26,19 @@ export class AuthController {
 	async login(@Body() dto: LoginDto, @Req() req: Request, @Ip() ip: string) {
 		const ua = req.get?.('user-agent') || req.headers['user-agent'];
 		return this.auth.login(
-			dto.usernameOrEmail,
+			dto.userName,
 			dto.password,
 			ip,
 			ua,
 			dto.deviceId,
 			dto.companyId,
 		);
+	}
+
+	@Post('register')
+	@HttpCode(200)
+	async register(@Body() dto: RegisterDto) {
+		return this.auth.register(dto);
 	}
 
 	@Post('refresh')
@@ -48,7 +56,14 @@ export class AuthController {
 
 	@UseGuards(JwtAuthGuard)
 	@Get('me')
+	@HttpCode(200)
 	async me(@Req() req: Request & { user: { userId: string } }) {
 		return this.auth.me(req.user.userId);
+	}
+
+	@Post('availability')
+	@HttpCode(200)
+	async availability(@Body() dto: AvailabilityDto) {
+		return this.auth.availability(dto);
 	}
 }

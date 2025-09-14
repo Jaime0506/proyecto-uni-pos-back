@@ -32,8 +32,8 @@ export class User {
 	@Column('boolean', { name: 'is_active', default: () => 'true' })
 	isActive!: boolean;
 
-	@Column('varchar', { name: 'phone_number', length: 15 })
-	phoneNumber!: string;
+	@Column('varchar', { name: 'phone_number', length: 15, nullable: true })
+	phoneNumber!: string | null;
 
 	@Column('varchar', { name: 'first_name', length: 100 })
 	firstName!: string;
@@ -57,4 +57,7 @@ export class User {
 
 	@DeleteDateColumn({ type: 'timestamptz', name: 'deleted_at', nullable: true })
 	deletedAt: Date | null;
+
+	@Column('boolean', { name: 'is_super_root', default: () => 'false' })
+	isSuperRoot!: boolean;
 }
