@@ -17,7 +17,7 @@ import { DeleteDto } from './dtos/delete.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')
-export class UsersController {
+export class UserController {
 	constructor(private readonly users: UserService) {}
 
 	@Patch('me/update')
