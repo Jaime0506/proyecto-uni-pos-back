@@ -51,6 +51,7 @@ export class PermissionGuard implements CanActivate {
 
 	async canActivate(ctx: ExecutionContext): Promise<boolean> {
 		const req = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
+
 		const user = req?.user;
 
 		// 0) Si no hay usuario, este guard no autentica; delega a JwtAuthGuard antes

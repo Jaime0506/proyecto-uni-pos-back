@@ -11,11 +11,11 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dtos/login.dto';
-import { RefreshDto } from './dtos/refresh.dto';
+import { LoginDto } from './dto/login.dto';
+import { RefreshDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { RegisterDto } from './dtos/register.dto';
-import { AvailabilityDto } from './dtos/availability.dto';
+import { RegisterDto } from './dto/register.dto';
+import { AvailabilityDto } from './dto/availability.dto';
 
 @Controller('auth')
 export class AuthController {

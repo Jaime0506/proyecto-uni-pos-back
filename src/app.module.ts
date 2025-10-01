@@ -2,10 +2,13 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { typeOrmConfig } from './database/typeorm.config';
 import { ConfigModule } from '@nestjs/config';
-import { AuthModule } from './auth/auth.module';
-import { UserModule } from './user/user.module';
-import { RedisModule } from './infra/redis/redis.module';
-import { AuthorizationModule } from './auth/authorization/authorization.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { RedisModule } from './modules/redis/redis.module';
+import { ProductsModule } from './modules/products/products.module';
+import { CompaniesModule } from './modules/companies/companies.module';
+import { StoresModule } from './modules/stores/stores.module';
+import { RewardsModule } from './modules/rewards/rewards.module';
 
 @Module({
 	imports: [
@@ -13,9 +16,11 @@ import { AuthorizationModule } from './auth/authorization/authorization.module';
 		TypeOrmModule.forRootAsync(typeOrmConfig),
 		RedisModule,
 		AuthModule,
-		UserModule,
-		AuthorizationModule,
+		UsersModule,
+		ProductsModule,
+		CompaniesModule,
+		StoresModule,
+		RewardsModule,
 	],
-	controllers: [],
 })
 export class AppModule {}

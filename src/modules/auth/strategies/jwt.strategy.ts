@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy as JwtStrategyBase } from 'passport-jwt';
@@ -10,7 +6,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, MoreThanOrEqual, Repository } from 'typeorm';
 import { Session } from '../entities/session.entity';
 
-type JwtPayload = { sub: string; jti: string; username: string };
+type JwtPayload = {
+	sub: string;
+	jti: string;
+	username: string;
+	isSuperRoot?: boolean;
+};
 
 interface RequestUser {
 	userId: string;
@@ -18,6 +19,7 @@ interface RequestUser {
 	sessionId: number;
 	jti: string;
 	companyId: number | null;
+	isSuperRoot?: boolean;
 }
 
 @Injectable()
@@ -56,6 +58,7 @@ export class JwtStrategy extends PassportStrategy(JwtStrategyBase) {
 			sessionId: session.id,
 			jti: payload.jti,
 			companyId: session.companyId ?? null,
+			isSuperRoot: payload.isSuperRoot ?? false,
 		};
 	}
 }

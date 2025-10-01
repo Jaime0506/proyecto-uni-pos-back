@@ -6,17 +6,17 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, IsNull, MoreThanOrEqual } from 'typeorm';
-import { User } from '../core/users/user.entity';
+import { User } from '../../core/users/user.entity';
 import { Session } from './entities/session.entity';
 import { compareSync } from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { addFromNow } from 'src/utils/jwt.utilities';
-import { processTransaction } from '../database/transactions';
-import { RegisterDto } from './dtos/register.dto';
+import { processTransaction } from '../../database/transactions';
+import { RegisterDto } from './dto/register.dto';
 import { createUserName, hashPassword } from 'src/utils/auth.utilities';
-import { AvailabilityDto } from './dtos/availability.dto';
+import { AvailabilityDto } from './dto/availability.dto';
 
 @Injectable()
 export class AuthService {
@@ -55,13 +55,13 @@ export class AuthService {
 			throw new UnauthorizedException('Credenciales inválidas');
 		}
 
-		const session = await this.sessions.findOne({
-			where: { user: { id: user.id } },
-		});
+		// const session = await this.sessions.findOne({
+		// 	where: { user: { id: user.id } },
+		// });
 
-		if (session) {
-			throw new UnauthorizedException('Usuario ya tiene una sesión activa');
-		}
+		// if (session) {
+		// 	throw new UnauthorizedException('Usuario ya tiene una sesión activa');
+		// }
 
 		const jti = randomUUID();
 		const refreshTtl = this.cfg.get<string>('JWT_REFRESH_TTL') || '7d';

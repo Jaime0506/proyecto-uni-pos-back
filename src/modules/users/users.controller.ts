@@ -10,14 +10,14 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { UserService } from './user.service';
+import { UserService } from './users.service';
 import { UpdateDto } from './dtos/update.dto';
 import { ChangePasswordDto } from './dtos/change-password.dto';
 import { DeleteDto } from './dtos/delete.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('users')
-export class UserController {
+export class UsersController {
 	constructor(private readonly users: UserService) {}
 
 	@Patch('me/update')

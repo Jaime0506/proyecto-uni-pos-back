@@ -1,5 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { RegisterDto } from '../../auth/dtos/register.dto';
+import { RegisterDto } from '../../auth/dto/register.dto';
 import { IsNotEmpty, IsString } from 'class-validator';
 
 export class UpdateDto extends PartialType(RegisterDto) {
