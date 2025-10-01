@@ -10,7 +10,7 @@ import {
 	Check,
 	Index,
 } from 'typeorm';
-import { RewardRule } from './reward-rule.entity';
+// Importación removida para evitar dependencia circular
 import { Product } from 'src/modules/products/entities/product.entity';
 
 const numericToNumber = {
@@ -30,9 +30,9 @@ export class RewardRuleProduct {
 	@Column({ name: 'reward_rule_id', type: 'int' })
 	rewardRuleId: number;
 
-	@ManyToOne(() => RewardRule, { nullable: false, onDelete: 'CASCADE' })
+	@ManyToOne('RewardRule', { nullable: false, onDelete: 'CASCADE' })
 	@JoinColumn({ name: 'reward_rule_id' })
-	rewardRule: RewardRule;
+	rewardRule: any;
 
 	@Column({ name: 'product_id', type: 'int' })
 	productId: number;

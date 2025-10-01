@@ -5,11 +5,10 @@ import { PermissionGuard, RequirePermissions } from '../auth/authorization';
 import { GetAllProductsDto } from './dto/get-all-products.dto';
 
 @Controller('products')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 export class ProductsController {
 	constructor(private readonly productsService: ProductsService) {}
 
-	@UseGuards(PermissionGuard)
 	@RequirePermissions(['products:read'])
 	@Post('get-all')
 	async getAllProducts(@Body() dto: GetAllProductsDto) {

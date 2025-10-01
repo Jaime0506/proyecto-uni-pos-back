@@ -13,7 +13,7 @@ import {
 import { Company } from 'src/modules/companies/entities/company.entity';
 import { Store } from 'src/modules/stores/entities/store.entity';
 import { User } from 'src/core/users/user.entity';
-import { RewardRuleProduct } from './reward-rule-product.entity';
+// Importación removida para evitar dependencia circular
 
 @Entity({ schema: 'sys', name: 'reward_rules' })
 @Index('ix_reward_rules_company_active_dates', [
@@ -80,8 +80,8 @@ export class RewardRule {
 	})
 	updatedAt: Date;
 
-	@OneToMany(() => RewardRuleProduct, (rrp) => rrp.rewardRule, {
+	@OneToMany('RewardRuleProduct', 'rewardRule', {
 		cascade: false,
 	})
-	products?: RewardRuleProduct[];
+	products?: any[];
 }
