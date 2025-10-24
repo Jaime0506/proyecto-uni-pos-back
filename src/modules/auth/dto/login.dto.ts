@@ -7,7 +7,7 @@ export class LoginDto {
 	})
 	@IsNotEmpty()
 	@IsString()
-	userName!: string;
+	username!: string;
 
 	@ApiProperty({ description: 'La contraseña del usuario' })
 	@IsNotEmpty()

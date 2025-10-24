@@ -1,4 +1,4 @@
-// src/auth/authorization/authorization.module.ts
+// src/auth/authorization-guard/authorization-guard.module.ts
 import { Module } from '@nestjs/common';
 import { PermissionGuard } from './permissions.guard';
 import { PERMISSION_RESOLVER } from './permission-resolver';
@@ -11,4 +11,4 @@ import { MyPermissionResolverService } from './my-permission-resolver.service';
 	],
 	exports: [PermissionGuard, PERMISSION_RESOLVER],
 })
-export class AuthorizationModule {}
+export class AuthorizationGuardModule {}

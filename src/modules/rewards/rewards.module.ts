@@ -5,12 +5,12 @@ import { RewardsController } from './rewards.controller';
 import { RewardRule } from './entities/reward-rule.entity';
 import { RewardRuleProduct } from './entities/reward-rule-product.entity';
 import { Product } from '../products/entities/product.entity';
-import { AuthorizationModule } from '../auth/authorization/authorization.module';
+import { AuthorizationGuardModule } from '../auth/authorization-guard/authorization-guard.module';
 
 @Module({
 	imports: [
 		TypeOrmModule.forFeature([RewardRule, RewardRuleProduct, Product]),
-		AuthorizationModule,
+		AuthorizationGuardModule,
 	],
 	controllers: [RewardsController],
 	providers: [RewardsService],

@@ -3,6 +3,7 @@ import {
 	Injectable,
 	BadRequestException,
 	UnauthorizedException,
+	InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, IsNull, MoreThanOrEqual } from 'typeorm';
@@ -226,11 +227,20 @@ export class AuthService {
 	}
 
 	async logout(jti: string, reason = 'logout') {
-		await this.sessions.update(
-			{ jtiAccess: jti, revokedAt: IsNull() },
-			{ revokedAt: new Date(), revokedReason: reason, logoutAt: new Date() },
-		);
-		return { ok: true };
+		try {
+			const result = await this.sessions.update(
+				{ jtiAccess: jti, revokedAt: IsNull() },
+				{ revokedAt: new Date(), revokedReason: reason, logoutAt: new Date() },
+			);
+			if (result.affected === 0) {
+				throw new UnauthorizedException('Sesión no encontrada');
+			}
+
+			return { ok: true };
+		} catch (error) {
+			console.error(error);
+			throw new InternalServerErrorException('Error al cerrar sesión');
+		}
 	}
 
 	async me(userId: string) {

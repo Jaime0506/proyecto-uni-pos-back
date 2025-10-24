@@ -26,7 +26,7 @@ export class AuthController {
 	async login(@Body() dto: LoginDto, @Req() req: Request, @Ip() ip: string) {
 		const ua = req.get?.('user-agent') || req.headers['user-agent'];
 		return this.auth.login(
-			dto.userName,
+			dto.username,
 			dto.password,
 			ip,
 			ua,
