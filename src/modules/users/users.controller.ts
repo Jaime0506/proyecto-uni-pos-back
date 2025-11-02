@@ -3,23 +3,31 @@ import {
 	Body,
 	Controller,
 	Delete,
+	Get,
 	HttpCode,
+	Param,
 	Patch,
+	Post,
 	Req,
 	UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserService } from './users.service';
 import { UpdateDto } from './dtos/update.dto';
 import { ChangePasswordDto } from './dtos/change-password.dto';
 import { DeleteDto } from './dtos/delete.dto';
+import { CreateUserWithRoleDto } from './dtos/create-user-with-role.dto';
 
+@ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
 	constructor(private readonly users: UserService) {}
 
+	// ========== Sección: Users - Personal ==========
+	@ApiTags('Users - Personal')
 	@Patch('me/update')
 	@HttpCode(200)
 	async update(
@@ -29,6 +37,7 @@ export class UsersController {
 		return this.users.update(req.user.userId, dto);
 	}
 
+	@ApiTags('Users - Personal')
 	@Patch('me/change-password')
 	@HttpCode(200)
 	async changePassword(
@@ -38,6 +47,7 @@ export class UsersController {
 		return this.users.changePassword(req.user.userId, dto);
 	}
 
+	@ApiTags('Users - Personal')
 	@Delete('me/delete')
 	@HttpCode(200)
 	async deleteUser(
@@ -46,4 +56,34 @@ export class UsersController {
 	) {
 		return this.users.deleteUser(req.user.userId, dto);
 	}
+
+	// ========== Sección: Users - Admin Interno ==========
+	// Aquí irían los endpoints administrativos con @ApiTags('Users - Admin')
+	@ApiTags('Users - Admin')
+	@Get('admin/get-all-users')
+	@HttpCode(200)
+	async getAllUsers() {
+		return this.users.getAllUsers();
+	}
+
+	@ApiTags('Users - Admin')
+	@Get('admin/get-user-by-id/:id')
+	@HttpCode(200)
+	async getUserById(@Param('id') id: string) {
+		return await this.users.getUserById(id);
+	}
+
+	@ApiTags('Users - Admin')
+	@Post('admin/create-user')
+	@HttpCode(200)
+	async createUser(@Body() dto: CreateUserWithRoleDto) {
+		return await this.users.createUserWithRole(dto);
+	}
+
+	// @ApiTags('Users - Admin')
+	// @Put('admin/update-user/:id')
+	// @HttpCode(200)
+	// async updateUser(@Param('id') id: string, @Body() dto: UpdateDto) {
+	// 	return await this.users.updateUser(id, dto);
+	// }
 }

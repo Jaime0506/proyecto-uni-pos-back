@@ -3,7 +3,6 @@ import {
 	IsEmail,
 	IsNotEmpty,
 	IsOptional,
-	IsPhoneNumber,
 	IsString,
 	MinLength,
 } from 'class-validator';
@@ -39,6 +38,5 @@ export class RegisterDto {
 	@ApiPropertyOptional({ description: 'El numero de telefono del usuario' })
 	@IsOptional()
 	@IsString()
-	@IsPhoneNumber()
 	phoneNumber?: string;
 }
