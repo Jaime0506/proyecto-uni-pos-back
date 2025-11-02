@@ -8,6 +8,8 @@ import {
 	ParseIntPipe,
 	Patch,
 	Post,
+	Req,
+	UseGuards,
 } from '@nestjs/common';
 import { AuthorizationService } from './authorization.service';
 import { CreatePermissionDto } from './dtos/permissions/create-permission';
@@ -16,12 +18,35 @@ import { DeletePermissionDto } from './dtos/permissions/delete-permission';
 import { CreateRoleDto } from './dtos/roles/create-role';
 import { UpdateRoleDto } from './dtos/roles/update-role';
 import { DeleteRoleDto } from './dtos/roles/delete-role';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { ApiBearerAuth } from '@nestjs/swagger';
+import type { Request } from 'express';
+import { RequestUser } from 'src/types/global';
 
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 @Controller('authorization')
 export class AuthorizationController {
 	constructor(private readonly authorizationService: AuthorizationService) {}
 
+	// Obtener todos los roles y permisos del usuario
+	@Get('get-all-roles-and-permissions-by-user-id')
+	@HttpCode(200)
+	async getAllRolesAndPermissionsByUserId(
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.authorizationService.getAllRolesAndPermissionsByUserId(
+			req,
+		);
+	}
+
 	// Permissions
+	@Get('permissions/get-all-admin')
+	@HttpCode(200)
+	async getAllPermissionsAdmin() {
+		return this.authorizationService.getAllPermissionsAdmin();
+	}
+
 	@Get('permissions/get-all')
 	@HttpCode(200)
 	async getAllPermissions() {
@@ -53,6 +78,12 @@ export class AuthorizationController {
 	}
 
 	// Roles
+	@Get('roles/get-all-admin')
+	@HttpCode(200)
+	async getAllRolesAdmin() {
+		return await this.authorizationService.getAllRolesAdmin();
+	}
+
 	@Get('roles/get-all/:id_company')
 	@HttpCode(200)
 	async getAllRoles(@Param('id_company', ParseIntPipe) id_company: number) {

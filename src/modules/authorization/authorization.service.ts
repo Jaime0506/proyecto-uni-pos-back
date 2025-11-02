@@ -2,6 +2,7 @@ import {
 	BadRequestException,
 	Injectable,
 	InternalServerErrorException,
+	UnauthorizedException,
 } from '@nestjs/common';
 import { Permission } from './entities/permission.entity';
 import { Role } from './entities/role.entity';
@@ -16,6 +17,10 @@ import { CreateRoleDto } from './dtos/roles/create-role';
 import { UpdateRoleDto } from './dtos/roles/update-role';
 import { DeleteRoleDto } from './dtos/roles/delete-role';
 import { StatusEnum } from 'src/core/status.enum';
+import type { Request } from 'express';
+import { RequestUser } from 'src/types/global';
+import { User } from 'src/core/users/user.entity';
+import { UserRole } from './entities/user-role.entity';
 
 @Injectable()
 export class AuthorizationService {
@@ -27,7 +32,96 @@ export class AuthorizationService {
 		@InjectRepository(RolePermission)
 		private readonly rolePermissionRepository: Repository<RolePermission>,
 		private readonly dataSource: DataSource,
+		@InjectRepository(User)
+		private readonly userRepository: Repository<User>,
+		@InjectRepository(UserRole)
+		private readonly userRoleRepository: Repository<UserRole>,
 	) {}
+
+	async getAllRolesAndPermissionsByUserId(
+		req: Request & { user: RequestUser },
+	) {
+		try {
+			const { userId } = req.user;
+
+			const user = await this.userRepository.findOne({ where: { id: userId } });
+			if (!user) throw new UnauthorizedException('Usuario no encontrado');
+
+			// Obtener el rol activo del usuario (siempre tiene uno a la vez)
+			const userRole = await this.userRoleRepository.findOne({
+				where: {
+					userId,
+					status: StatusEnum.ACTIVE,
+					deletedAt: IsNull(),
+				},
+				relations: ['role'],
+			});
+
+			if (!userRole || !userRole.role) {
+				return {
+					ok: true,
+					message: 'Roles y permisos obtenidos correctamente',
+					data: { result: null },
+				};
+			}
+
+			const role = userRole.role;
+
+			// Obtener solo permisos activos para el rol
+			const rolePermissions = await this.rolePermissionRepository.find({
+				where: {
+					roleId: role.id,
+					status: StatusEnum.ACTIVE,
+					deletedAt: IsNull(),
+				},
+				relations: ['permission'],
+			});
+
+			// Filtrar solo permisos activos y extraer nombres
+			const permissions = rolePermissions
+				.filter(
+					(rp) =>
+						rp.permission?.status === StatusEnum.ACTIVE &&
+						rp.permission?.deletedAt === null,
+				)
+				.map((rp) => rp.permission?.name)
+				.filter((name) => name !== undefined && name !== null);
+
+			// Retornar el rol con la propiedad permissions, similar a getAllRolesAdmin
+			const roleWithPermissions = {
+				...role,
+				permissions,
+			};
+
+			return {
+				ok: true,
+				message: 'Roles y permisos obtenidos correctamente',
+				data: { result: roleWithPermissions },
+			};
+		} catch (error) {
+			console.error(error);
+			throw new InternalServerErrorException(
+				'Error al obtener los roles y permisos del usuario',
+			);
+		}
+	}
+
+	async getAllPermissionsAdmin() {
+		try {
+			const permissions = await this.permissionRepository.find({
+				withDeleted: true,
+			});
+
+			return {
+				ok: true,
+				message: 'Permisos obtenidos correctamente',
+				data: { result: permissions },
+			};
+		} catch (error) {
+			console.error(error);
+			throw new InternalServerErrorException('Error al obtener los permisos');
+		}
+	}
 
 	// Permission
 	async getAllPermissions() {
@@ -109,11 +203,12 @@ export class AuthorizationService {
 
 	async updatePermission(dto: UpdatePermissionDto) {
 		try {
-			const { id, name, description } = dto;
+			const { id, name, description, status } = dto;
 
 			// verificar si la permission existe
 			const existingPermission = await this.permissionRepository.findOne({
 				where: { id },
+				withDeleted: true,
 			});
 
 			if (!existingPermission) {
@@ -125,6 +220,7 @@ export class AuthorizationService {
 				const existingPermissionWithSameName =
 					await this.permissionRepository.findOne({
 						where: { name },
+						withDeleted: true,
 					});
 				if (existingPermissionWithSameName) {
 					throw new BadRequestException(`El nombre ${name} ya existe`);
@@ -135,6 +231,17 @@ export class AuthorizationService {
 			existingPermission.description =
 				description ?? existingPermission.description;
 			existingPermission.updatedAt = new Date();
+
+			if (status && status !== existingPermission.status) {
+				existingPermission.status = status;
+				existingPermission.updatedAt = new Date();
+
+				if (status === StatusEnum.DESACTIVE) {
+					existingPermission.deletedAt = new Date();
+				} else {
+					existingPermission.deletedAt = null;
+				}
+			}
 
 			await this.permissionRepository.save(existingPermission);
 
@@ -202,6 +309,45 @@ export class AuthorizationService {
 		}
 	}
 
+	async getAllRolesAdmin() {
+		try {
+			const roles = await this.roleRepository.find({
+				withDeleted: true,
+			});
+
+			// Obtener todos los permisos para cada rol (incluyendo desactivados)
+			const rolesWithPermissions = await Promise.all(
+				roles.map(async (role) => {
+					// Usar QueryBuilder para incluir permisos desactivados
+					const rolePermissions = await this.rolePermissionRepository
+						.createQueryBuilder('rp')
+						.withDeleted()
+						.leftJoinAndSelect('rp.permission', 'permission')
+						.where('rp.roleId = :roleId', { roleId: role.id })
+						.getMany();
+
+					const permissions = rolePermissions
+						.map((rp) => rp.permission?.name)
+						.filter((name) => name !== undefined && name !== null);
+
+					return {
+						...role,
+						permissions,
+					};
+				}),
+			);
+
+			return {
+				ok: true,
+				message: 'Roles obtenidos correctamente',
+				data: { result: rolesWithPermissions },
+			};
+		} catch (error) {
+			console.error(error);
+			throw new InternalServerErrorException('Error al obtener los roles');
+		}
+	}
+
 	// Role
 	async getAllRoles(id_company: number) {
 		try {
@@ -213,10 +359,39 @@ export class AuthorizationService {
 				},
 			});
 
+			// Obtener solo permisos activos para cada rol
+			const rolesWithPermissions = await Promise.all(
+				roles.map(async (role) => {
+					const rolePermissions = await this.rolePermissionRepository.find({
+						where: {
+							roleId: role.id,
+							status: StatusEnum.ACTIVE,
+							deletedAt: IsNull(),
+						},
+						relations: ['permission'],
+					});
+
+					// Filtrar solo permisos activos
+					const permissions = rolePermissions
+						.filter(
+							(rp) =>
+								rp.permission?.status === StatusEnum.ACTIVE &&
+								rp.permission?.deletedAt === null,
+						)
+						.map((rp) => rp.permission?.name)
+						.filter((name) => name !== undefined && name !== null);
+
+					return {
+						...role,
+						permissions,
+					};
+				}),
+			);
+
 			return {
 				ok: true,
 				message: 'Roles obtenidos correctamente',
-				data: { result: roles },
+				data: { result: rolesWithPermissions },
 			};
 		} catch (error) {
 			console.error(error);
@@ -353,6 +528,7 @@ export class AuthorizationService {
 			// verificar si el rol existe
 			const existingRole = await this.roleRepository.findOne({
 				where: { id },
+				withDeleted: true,
 			});
 
 			if (!existingRole) {
@@ -363,6 +539,7 @@ export class AuthorizationService {
 			if (name && name !== existingRole.name) {
 				const existingRoleWithSameName = await this.roleRepository.findOne({
 					where: { companyId: companyId || existingRole.companyId, name },
+					withDeleted: true,
 				});
 				if (existingRoleWithSameName) {
 					throw new BadRequestException(
@@ -396,8 +573,18 @@ export class AuthorizationService {
 					existingRole.companyId = companyId ?? existingRole.companyId;
 					existingRole.name = name ?? existingRole.name;
 					existingRole.description = description ?? existingRole.description;
-					existingRole.status = status ?? existingRole.status;
 					existingRole.updatedAt = new Date();
+
+					if (status && status !== existingRole.status) {
+						existingRole.status = status;
+						existingRole.updatedAt = new Date();
+
+						if (status === StatusEnum.DESACTIVE) {
+							existingRole.deletedAt = new Date();
+						} else {
+							existingRole.deletedAt = null;
+						}
+					}
 
 					const updatedRole = await queryRunner.manager.save(
 						Role,

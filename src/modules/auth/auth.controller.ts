@@ -16,6 +16,7 @@ import { RefreshDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RegisterDto } from './dto/register.dto';
 import { AvailabilityDto } from './dto/availability.dto';
+import { RequestUser } from 'src/types/global';
 
 @Controller('auth')
 export class AuthController {
@@ -57,7 +58,7 @@ export class AuthController {
 	@UseGuards(JwtAuthGuard)
 	@Get('me')
 	@HttpCode(200)
-	async me(@Req() req: Request & { user: { userId: string } }) {
+	async me(@Req() req: Request & { user: RequestUser }) {
 		return this.auth.me(req.user.userId);
 	}
 
