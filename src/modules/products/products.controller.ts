@@ -1,6 +1,9 @@
 import {
 	Body,
 	Controller,
+	Delete,
+	Param,
+	Patch,
 	Post,
 	UploadedFile,
 	UseGuards,
@@ -11,6 +14,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionGuard } from '../auth/authorization-guard';
 import { GetAllProductsDto } from './dto/get-all-products.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { UpdateProductDto } from './dto/update-product.dto';
 
 @Controller('products')
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -29,6 +33,16 @@ export class ProductsController {
 		@Body() body: any,
 		@UploadedFile() file: Express.Multer.File,
 	) {
-		return await this.productsService.uploadProductsByFile(body, file);
+		return await this.productsService.uploadProducts(body, file);
+	}
+
+	@Patch('update')
+	async updateProduct(@Body() dto: UpdateProductDto) {
+		return this.productsService.updateProduct(dto);
+	}
+
+	@Delete('delete/:id')
+	async deleteProduct(@Param('id') id: number) {
+		return this.productsService.deleteProduct(id);
 	}
 }

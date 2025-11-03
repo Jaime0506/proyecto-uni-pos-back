@@ -56,4 +56,7 @@ export class Product {
 
 	@DeleteDateColumn({ type: 'timestamptz', name: 'deleted_at', nullable: true })
 	deletedAt: Date | null;
+
+	@Column({ type: 'text' })
+	image: string;
 }
