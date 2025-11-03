@@ -18,6 +18,8 @@ import { processTransaction } from '../../database/transactions';
 import { RegisterDto } from './dto/register.dto';
 import { createUserName, hashPassword } from 'src/utils/auth.utilities';
 import { AvailabilityDto } from './dto/availability.dto';
+import { RequestUser } from 'src/types/global';
+import { Request } from 'express';
 
 @Injectable()
 export class AuthService {
@@ -226,8 +228,10 @@ export class AuthService {
 		return { accessToken };
 	}
 
-	async logout(jti: string, reason = 'logout') {
+	async logout(req: Request & { user: RequestUser }, reason = 'logout') {
 		try {
+			const { jti } = req.user;
+
 			const result = await this.sessions.update(
 				{ jtiAccess: jti, revokedAt: IsNull() },
 				{ revokedAt: new Date(), revokedReason: reason, logoutAt: new Date() },

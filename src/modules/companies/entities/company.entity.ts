@@ -1,3 +1,4 @@
+import { StatusEnum } from 'src/core/status.enum';
 import {
 	Entity,
 	PrimaryGeneratedColumn,
@@ -38,4 +39,15 @@ export class Company {
 
 	@DeleteDateColumn({ type: 'timestamptz', name: 'deleted_at', nullable: true })
 	deletedAt: Date | null;
+
+	@Column({ type: 'int', default: 1, name: 'max_stores' })
+	maxStores: number;
+
+	@Column({
+		type: 'enum',
+		enum: StatusEnum,
+		default: StatusEnum.ACTIVE,
+		name: 'status',
+	})
+	status: StatusEnum;
 }

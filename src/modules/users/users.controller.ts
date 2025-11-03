@@ -19,6 +19,7 @@ import { UpdateDto } from './dtos/update.dto';
 import { ChangePasswordDto } from './dtos/change-password.dto';
 import { DeleteDto } from './dtos/delete.dto';
 import { CreateUserWithRoleDto } from './dtos/create-user-with-role.dto';
+import { UpdateUserWithRoleDto } from './dtos/update-user-with-role.dto';
 
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -80,10 +81,10 @@ export class UsersController {
 		return await this.users.createUserWithRole(dto);
 	}
 
-	// @ApiTags('Users - Admin')
-	// @Put('admin/update-user/:id')
-	// @HttpCode(200)
-	// async updateUser(@Param('id') id: string, @Body() dto: UpdateDto) {
-	// 	return await this.users.updateUser(id, dto);
-	// }
+	@ApiTags('Users - Admin')
+	@Patch('admin/update-user')
+	@HttpCode(200)
+	async updateUser(@Body() dto: UpdateUserWithRoleDto) {
+		return await this.users.updateUserWithRole(dto);
+	}
 }
