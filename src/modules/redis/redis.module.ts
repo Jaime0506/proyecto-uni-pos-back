@@ -1,6 +1,7 @@
 // src/infra/redis/redis.module.ts
 import { Global, Module } from '@nestjs/common';
 import { RedisModule as NestRedisModule } from '@nestjs-modules/ioredis';
+import { RedisService } from './redis.service';
 
 @Global()
 @Module({
@@ -10,6 +11,7 @@ import { RedisModule as NestRedisModule } from '@nestjs-modules/ioredis';
 			url: process.env.REDIS_URL ?? 'redis://localhost:6379',
 		}),
 	],
-	exports: [NestRedisModule],
+	providers: [RedisService],
+	exports: [RedisService],
 })
 export class RedisModule {}

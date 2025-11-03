@@ -99,6 +99,7 @@ export class PermissionGuard implements CanActivate {
 
 		// 5) Denegado
 		throw new ForbiddenException({
+			message: 'No tienes permisos para realizar esta acción',
 			code: 'AUTHZ-DENIED',
 			title: 'Insufficient permissions',
 			detail: {

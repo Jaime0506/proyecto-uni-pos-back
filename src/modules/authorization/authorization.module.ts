@@ -7,6 +7,7 @@ import { Role } from './entities/role.entity';
 import { UserRole } from './entities/user-role.entity';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from 'src/core/users/user.entity';
+import { AuthorizationGuardModule } from '../auth/authorization-guard/authorization-guard.module';
 
 @Module({
 	imports: [
@@ -17,6 +18,7 @@ import { User } from 'src/core/users/user.entity';
 			RolePermission,
 			User,
 		]),
+		AuthorizationGuardModule, // Importar para poder usar el servicio de permisos
 	],
 	controllers: [AuthorizationController],
 	providers: [AuthorizationService],

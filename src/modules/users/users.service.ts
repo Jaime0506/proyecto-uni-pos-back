@@ -13,6 +13,7 @@ import { compareSync } from 'bcrypt';
 import { hashPassword, createUserName } from 'src/utils/auth.utilities';
 import { DeleteDto } from './dtos/delete.dto';
 import { CreateUserWithRoleDto } from './dtos/create-user-with-role.dto';
+import { UpdateUserWithRoleDto } from './dtos/update-user-with-role.dto';
 import { UserRole } from 'src/modules/authorization/entities/user-role.entity';
 import { Role } from 'src/modules/authorization/entities/role.entity';
 import { StatusEnum } from 'src/core/status.enum';
@@ -105,14 +106,58 @@ export class UserService {
 
 	// ========== Sección: Users - Admin Interno ==========
 	async getAllUsers() {
+		// Obtener todos los usuarios (incluyendo eliminados)
 		const users = await this.users.find({
 			withDeleted: true,
+		});
+
+		// Obtener todos los UserRoles activos con sus roles en una sola query
+		const userRoles = await this.userRoleRepository.find({
+			where: {
+				status: StatusEnum.ACTIVE,
+			},
+			relations: ['role'],
+			order: {
+				createdAt: 'DESC',
+			},
+		});
+
+		// Crear un mapa de userId -> role para acceso rápido
+		const userRoleMap = new Map<string, Role>();
+		userRoles.forEach((userRole) => {
+			// Si un usuario tiene múltiples roles, tomar el más reciente (ya ordenado por createdAt DESC)
+			if (!userRoleMap.has(userRole.userId) && userRole.role) {
+				userRoleMap.set(userRole.userId, userRole.role);
+			}
+		});
+
+		// Formatear los resultados para incluir la propiedad role
+		const usersWithRoles = users.map((user) => {
+			const role = userRoleMap.get(user.id);
+
+			const userWithRole = {
+				...user,
+				role: role
+					? {
+							id: role.id,
+							companyId: role.companyId,
+							name: role.name,
+							description: role.description,
+							status: role.status,
+							deletedAt: role.deletedAt,
+							createdAt: role.createdAt,
+							updatedAt: role.updatedAt,
+						}
+					: null,
+			};
+
+			return userWithRole;
 		});
 
 		return {
 			ok: true,
 			message: 'Usuarios obtenidos correctamente',
-			data: { result: users },
+			data: { result: usersWithRoles },
 		};
 	}
 
@@ -220,6 +265,115 @@ export class UserService {
 				throw error;
 			}
 			throw new InternalServerErrorException('Error al crear el usuario');
+		}
+	}
+
+	async updateUserWithRole(dto: UpdateUserWithRoleDto) {
+		try {
+			const {
+				id_user,
+				firstName,
+				lastName,
+				email,
+				nationalId,
+				password,
+				phoneNumber,
+				roleId,
+			} = dto;
+
+			// Verificar que el usuario existe
+			const user = await this.users.findOne({
+				where: { id: id_user },
+				withDeleted: false,
+			});
+
+			if (!user) {
+				throw new BadRequestException('El usuario no existe');
+			}
+
+			// Si se proporciona un roleId, verificar que el rol exista y esté activo
+			if (roleId) {
+				const roleRepository = this.dataSource.getRepository(Role);
+				const role = await roleRepository.findOne({
+					where: {
+						id: roleId,
+						status: StatusEnum.ACTIVE,
+					},
+				});
+
+				if (!role) {
+					throw new BadRequestException(
+						`El rol ${roleId} no existe o está desactivado`,
+					);
+				}
+			}
+
+			// Ejecutar transacción para actualizar usuario y rol
+			const result = await processTransaction(
+				this.dataSource,
+				async (queryRunner) => {
+					// Actualizar los campos del usuario solo si se proporcionan
+					if (firstName !== undefined) user.firstName = firstName;
+					if (lastName !== undefined) user.lastName = lastName;
+					if (email !== undefined) user.email = email;
+					if (nationalId !== undefined) user.nationalId = nationalId;
+					if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+					if (password !== undefined) {
+						user.password = await hashPassword(password);
+					}
+					user.updatedAt = new Date();
+
+					const updatedUser = await queryRunner.manager.save(User, user);
+
+					// Si se proporciona un roleId, manejar el rol del usuario
+					if (roleId !== undefined) {
+						// Buscar todos los UserRoles activos del usuario
+						const existingUserRoles = await queryRunner.manager.find(UserRole, {
+							where: { userId: id_user, status: StatusEnum.ACTIVE },
+						});
+
+						// Desactivar/eliminar los roles existentes (soft delete)
+						if (existingUserRoles.length > 0) {
+							await Promise.all(
+								existingUserRoles.map(async (userRole) => {
+									userRole.deletedAt = new Date();
+									userRole.updatedAt = new Date();
+									userRole.status = StatusEnum.DESACTIVE;
+									await queryRunner.manager.save(UserRole, userRole);
+								}),
+							);
+						}
+
+						// Si se proporciona un roleId válido, crear el nuevo rol
+						if (roleId) {
+							const newUserRole = queryRunner.manager.create(UserRole, {
+								userId: id_user,
+								roleId,
+								companyId: 1, // Hardcodeado a 1 por ahora (igual que en create)
+								status: StatusEnum.ACTIVE,
+							});
+							await queryRunner.manager.save(UserRole, newUserRole);
+						}
+					}
+
+					return updatedUser;
+				},
+			);
+
+			return {
+				ok: true,
+				message: 'Usuario actualizado correctamente',
+				data: { result },
+			};
+		} catch (error) {
+			console.error(error);
+			if (
+				error instanceof BadRequestException ||
+				error instanceof UnauthorizedException
+			) {
+				throw error;
+			}
+			throw new InternalServerErrorException('Error al actualizar el usuario');
 		}
 	}
 }

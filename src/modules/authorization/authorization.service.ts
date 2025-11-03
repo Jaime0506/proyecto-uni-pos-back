@@ -21,6 +21,7 @@ import type { Request } from 'express';
 import { RequestUser } from 'src/types/global';
 import { User } from 'src/core/users/user.entity';
 import { UserRole } from './entities/user-role.entity';
+import { MyPermissionResolverService } from '../auth/authorization-guard/my-permission-resolver.service';
 
 @Injectable()
 export class AuthorizationService {
@@ -36,6 +37,7 @@ export class AuthorizationService {
 		private readonly userRepository: Repository<User>,
 		@InjectRepository(UserRole)
 		private readonly userRoleRepository: Repository<UserRole>,
+		private readonly permissionResolver: MyPermissionResolverService,
 	) {}
 
 	async getAllRolesAndPermissionsByUserId(
@@ -612,6 +614,30 @@ export class AuthorizationService {
 					return updatedRole;
 				},
 			);
+
+			// Invalidar cache de todos los usuarios que tienen este rol
+			try {
+				// Obtener todos los UserRoles que tienen este roleId (incluyendo eliminados)
+				// para cubrir todos los casos posibles
+				const userRolesWithThisRole = await this.userRoleRepository.find({
+					where: { roleId: id },
+					withDeleted: true,
+				});
+				// Invalidar el cache de cada usuario que tiene este rol
+				await Promise.all(
+					userRolesWithThisRole.map(async (userRole) => {
+						console.log('Invalidando cache de usuario', userRole.userId);
+						await this.permissionResolver.invalidate(userRole.userId, null);
+					}),
+				);
+			} catch (cacheError) {
+				// Si hay error al invalidar el cache, no es crítico, solo loguear
+				// La actualización del rol ya fue exitosa
+				console.warn(
+					`Error al invalidar cache de usuarios con rol ${id}:`,
+					cacheError,
+				);
+			}
 
 			return {
 				ok: true,
