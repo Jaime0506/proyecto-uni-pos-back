@@ -1,3 +1,4 @@
+import { StatusEnum } from 'src/core/status.enum';
 import { Company } from 'src/modules/companies/entities/company.entity';
 import {
 	Entity,
@@ -39,4 +40,12 @@ export class Store {
 
 	@DeleteDateColumn({ type: 'timestamptz', name: 'deleted_at', nullable: true })
 	deletedAt: Date | null;
+
+	@Column({
+		type: 'enum',
+		enum: StatusEnum,
+		default: StatusEnum.ACTIVE,
+		name: 'status',
+	})
+	status: StatusEnum;
 }
