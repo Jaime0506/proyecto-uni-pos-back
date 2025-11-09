@@ -1,6 +1,7 @@
 import {
 	Body,
 	Controller,
+	Get,
 	Post,
 	Query,
 	Request,
@@ -24,9 +25,8 @@ export class SalesController {
 		return await this.salesService.getAllSales(getSalesDto);
 	}
 
-	@Post('/customers/get-all')
+	@Get('/customers/get-all')
 	async getAllCustomers(@Query('companyId') companyId?: string) {
-		console.log(companyId);
 		const companyIdNumber = companyId ? parseInt(companyId, 10) : undefined;
 		return await this.salesService.getAllCustomers(companyIdNumber);
 	}

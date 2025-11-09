@@ -13,6 +13,9 @@ export class Sale {
 	@Column({ type: 'int' })
 	company_id: number;
 
+	@Column({ type: 'int', nullable: true })
+	campaign_id: number;
+
 	@Column({ type: 'int' })
 	store_id: number;
 
