@@ -10,6 +10,7 @@ import { CompaniesModule } from './modules/companies/companies.module';
 import { StoresModule } from './modules/stores/stores.module';
 import { RewardsModule } from './modules/rewards/rewards.module';
 import { AuthorizationModule } from './modules/authorization/authorization.module';
+import { SalesModule } from './modules/sales/sales.module';
 
 @Module({
 	imports: [
@@ -23,6 +24,7 @@ import { AuthorizationModule } from './modules/authorization/authorization.modul
 		StoresModule,
 		RewardsModule,
 		AuthorizationModule,
+		SalesModule,
 	],
 })
 export class AppModule {}
