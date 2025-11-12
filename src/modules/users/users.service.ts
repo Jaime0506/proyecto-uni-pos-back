@@ -18,6 +18,9 @@ import { UserRole } from 'src/modules/authorization/entities/user-role.entity';
 import { Role } from 'src/modules/authorization/entities/role.entity';
 import { StatusEnum } from 'src/core/status.enum';
 import { processTransaction } from 'src/database/transactions';
+import { UserCompanyMembership } from './entities/user-company-membership.entity';
+import { Company } from '../companies/entities/company.entity';
+import { Store } from '../stores/entities/store.entity';
 
 @Injectable()
 export class UserService {
@@ -25,6 +28,12 @@ export class UserService {
 		@InjectRepository(User) private readonly users: Repository<User>,
 		@InjectRepository(UserRole)
 		private readonly userRoleRepository: Repository<UserRole>,
+		@InjectRepository(UserCompanyMembership)
+		private readonly userCompanyMembershipRepository: Repository<UserCompanyMembership>,
+		@InjectRepository(Company)
+		private readonly companyRepository: Repository<Company>,
+		@InjectRepository(Store)
+		private readonly storeRepository: Repository<Store>,
 		private readonly dataSource: DataSource,
 	) {}
 
@@ -122,6 +131,17 @@ export class UserService {
 			},
 		});
 
+		// Obtener todas las membresías activas con sus compañías
+		const userMemberships = await this.userCompanyMembershipRepository.find({
+			where: {
+				isActive: true,
+			},
+			relations: ['company'],
+			order: {
+				joinedAt: 'DESC',
+			},
+		});
+
 		// Crear un mapa de userId -> role para acceso rápido
 		const userRoleMap = new Map<string, Role>();
 		userRoles.forEach((userRole) => {
@@ -131,9 +151,19 @@ export class UserService {
 			}
 		});
 
-		// Formatear los resultados para incluir la propiedad role
+		// Crear un mapa de userId -> company para acceso rápido
+		const userCompanyMap = new Map<string, Company>();
+		userMemberships.forEach((membership) => {
+			// Si un usuario tiene múltiples compañías, tomar la más reciente (ya ordenado por joinedAt DESC)
+			if (!userCompanyMap.has(membership.userId) && membership.company) {
+				userCompanyMap.set(membership.userId, membership.company);
+			}
+		});
+
+		// Formatear los resultados para incluir la propiedad role y company
 		const usersWithRoles = users.map((user) => {
 			const role = userRoleMap.get(user.id);
+			const company = userCompanyMap.get(user.id);
 
 			const userWithRole = {
 				...user,
@@ -147,6 +177,22 @@ export class UserService {
 							deletedAt: role.deletedAt,
 							createdAt: role.createdAt,
 							updatedAt: role.updatedAt,
+						}
+					: null,
+				company: company
+					? {
+							id: company.id,
+							name: company.name,
+							nit: company.nit,
+							address: company.address,
+							dns: company.dns,
+							phone: company.phone,
+							email: company.email,
+							maxStores: company.maxStores,
+							status: company.status,
+							createdAt: company.createdAt,
+							updatedAt: company.updatedAt,
+							deletedAt: company.deletedAt,
 						}
 					: null,
 			};
@@ -172,6 +218,64 @@ export class UserService {
 		};
 	}
 
+	async getUserCompanyAndStores(userId: string) {
+		try {
+			// Buscar la membresía activa del usuario
+			const membership = await this.userCompanyMembershipRepository.findOne({
+				where: {
+					userId,
+					isActive: true,
+				},
+				relations: ['company'],
+			});
+
+			if (!membership || !membership.company) {
+				return {
+					ok: true,
+					message: 'Usuario no tiene una compañía activa',
+					data: {
+						company: null,
+						stores: [],
+					},
+				};
+			}
+
+			const company = membership.company;
+
+			// Buscar las tiendas activas de la compañía
+			const stores = await this.storeRepository.find({
+				where: {
+					company: { id: company.id },
+					status: StatusEnum.ACTIVE,
+				},
+				withDeleted: false,
+			});
+
+			// Formatear la respuesta con solo id y nombre
+			const result = {
+				company: {
+					id: company.id,
+					name: company.name,
+				},
+				stores: stores.map((store) => ({
+					id: store.id,
+					name: store.name,
+				})),
+			};
+
+			return {
+				ok: true,
+				message: 'Compañía y tiendas obtenidas correctamente',
+				data: result,
+			};
+		} catch (error) {
+			console.error(error);
+			throw new InternalServerErrorException(
+				'Error al obtener la compañía y tiendas del usuario',
+			);
+		}
+	}
+
 	async createUserWithRole(dto: CreateUserWithRoleDto) {
 		try {
 			const {
@@ -182,6 +286,7 @@ export class UserService {
 				password,
 				phoneNumber,
 				roleId,
+				companyId,
 			} = dto;
 
 			// Verificar si el usuario ya existe
@@ -214,6 +319,20 @@ export class UserService {
 				}
 			}
 
+			// Si se proporciona un companyId, verificar que la compañía exista
+			if (companyId !== undefined) {
+				const company = await this.companyRepository.findOne({
+					where: { id: companyId },
+					withDeleted: false,
+				});
+
+				if (!company) {
+					throw new BadRequestException(
+						`La compañía con ID ${companyId} no existe o está desactivada`,
+					);
+				}
+			}
+
 			// Crear el username
 			const username = createUserName(firstName, lastName, nationalId);
 
@@ -241,10 +360,23 @@ export class UserService {
 						const userRole = queryRunner.manager.create(UserRole, {
 							userId: savedUser.id,
 							roleId,
-							companyId: 1, // Hardcodeado a 1 por ahora
+							companyId: companyId !== undefined ? companyId : 1, // Usar companyId si se proporciona, sino 1 por defecto
 							status: StatusEnum.ACTIVE,
 						});
 						await queryRunner.manager.save(UserRole, userRole);
+					}
+
+					// Si se proporciona un companyId, crear la membresía
+					if (companyId !== undefined) {
+						const membership = queryRunner.manager.create(
+							UserCompanyMembership,
+							{
+								userId: savedUser.id,
+								companyId,
+								isActive: true,
+							},
+						);
+						await queryRunner.manager.save(UserCompanyMembership, membership);
 					}
 
 					return savedUser;
@@ -279,6 +411,7 @@ export class UserService {
 				password,
 				phoneNumber,
 				roleId,
+				companyId,
 			} = dto;
 
 			// Verificar que el usuario existe
@@ -304,6 +437,20 @@ export class UserService {
 				if (!role) {
 					throw new BadRequestException(
 						`El rol ${roleId} no existe o está desactivado`,
+					);
+				}
+			}
+
+			// Si se proporciona un companyId, verificar que la compañía exista
+			if (companyId !== undefined) {
+				const company = await this.companyRepository.findOne({
+					where: { id: companyId },
+					withDeleted: false,
+				});
+
+				if (!company) {
+					throw new BadRequestException(
+						`La compañía con ID ${companyId} no existe o está desactivada`,
 					);
 				}
 			}
@@ -344,15 +491,96 @@ export class UserService {
 							);
 						}
 
-						// Si se proporciona un roleId válido, crear el nuevo rol
+						// Si se proporciona un roleId válido, crear o actualizar el rol
 						if (roleId) {
-							const newUserRole = queryRunner.manager.create(UserRole, {
-								userId: id_user,
-								roleId,
-								companyId: 1, // Hardcodeado a 1 por ahora (igual que en create)
-								status: StatusEnum.ACTIVE,
-							});
-							await queryRunner.manager.save(UserRole, newUserRole);
+							const finalCompanyId = companyId !== undefined ? companyId : 1;
+							// Verificar si ya existe un UserRole con el mismo userId y roleId
+							const existingUserRole = await queryRunner.manager.findOne(
+								UserRole,
+								{
+									where: {
+										userId: id_user,
+										roleId,
+									},
+									withDeleted: true,
+								},
+							);
+
+							if (existingUserRole) {
+								// Si ya existe, actualizarlo
+								existingUserRole.companyId = finalCompanyId;
+								existingUserRole.status = StatusEnum.ACTIVE;
+								existingUserRole.deletedAt = null;
+								existingUserRole.updatedAt = new Date();
+								await queryRunner.manager.save(UserRole, existingUserRole);
+							} else {
+								// Si no existe, crear uno nuevo
+								const newUserRole = queryRunner.manager.create(UserRole, {
+									userId: id_user,
+									roleId,
+									companyId: finalCompanyId,
+									status: StatusEnum.ACTIVE,
+								});
+								await queryRunner.manager.save(UserRole, newUserRole);
+							}
+						}
+					}
+
+					// Si se proporciona un companyId, crear o actualizar la membresía
+					if (companyId !== undefined) {
+						// Desactivar todas las membresías activas del usuario en otras compañías
+						const activeMemberships = await queryRunner.manager.find(
+							UserCompanyMembership,
+							{
+								where: {
+									userId: id_user,
+									isActive: true,
+								},
+							},
+						);
+
+						// Desactivar las membresías que no sean de la compañía actual
+						await Promise.all(
+							activeMemberships
+								.filter((m) => m.companyId !== companyId)
+								.map(async (membership) => {
+									membership.isActive = false;
+									await queryRunner.manager.save(
+										UserCompanyMembership,
+										membership,
+									);
+								}),
+						);
+
+						// Buscar si ya existe una membresía para esta compañía
+						const existingMembership = await queryRunner.manager.findOne(
+							UserCompanyMembership,
+							{
+								where: {
+									userId: id_user,
+									companyId,
+								},
+							},
+						);
+
+						if (existingMembership) {
+							// Si ya existe, activarla
+							existingMembership.isActive = true;
+							await queryRunner.manager.save(
+								UserCompanyMembership,
+								existingMembership,
+							);
+						} else {
+							// Si no existe, crearla
+							const membership = queryRunner.manager.create(
+								UserCompanyMembership,
+								{
+									userId: id_user,
+									companyId,
+									isActive: true,
+								},
+							);
+							await queryRunner.manager.save(UserCompanyMembership, membership);
 						}
 					}
 

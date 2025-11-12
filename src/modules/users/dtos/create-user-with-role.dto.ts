@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsNumber, IsOptional } from 'class-validator';
 import { RegisterDto } from 'src/modules/auth/dto/register.dto';
 
@@ -7,4 +7,9 @@ export class CreateUserWithRoleDto extends RegisterDto {
 	@IsOptional()
 	@IsNumber()
 	roleId!: number;
+
+	@ApiPropertyOptional({ description: 'El id de la compañía' })
+	@IsOptional()
+	@IsNumber()
+	companyId!: number;
 }

@@ -7,4 +7,9 @@ export class UpdateUserWithRoleDto extends UpdateDto {
 	@IsOptional()
 	@IsNumber()
 	roleId?: number;
+
+	@ApiPropertyOptional({ description: 'El id de la compañía' })
+	@IsOptional()
+	@IsNumber()
+	companyId?: number;
 }
