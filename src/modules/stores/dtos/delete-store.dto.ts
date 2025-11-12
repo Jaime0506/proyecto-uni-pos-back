@@ -7,4 +7,3 @@ export class DeleteStoreDto {
 	@IsNumber()
 	id!: number;
 }
-

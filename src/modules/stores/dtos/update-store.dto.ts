@@ -18,4 +18,3 @@ export class UpdateStoreDto extends PartialType(CreateStoreDto) {
 	@IsOptional()
 	status?: StatusEnum;
 }
-
