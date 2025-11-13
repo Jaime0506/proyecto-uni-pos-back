@@ -12,6 +12,7 @@ import { RewardsModule } from './modules/rewards/rewards.module';
 import { AuthorizationModule } from './modules/authorization/authorization.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { BonificationsModule } from './modules/bonifications/bonifications.module';
 
 @Module({
 	imports: [
@@ -27,6 +28,7 @@ import { SuppliersModule } from './modules/suppliers/suppliers.module';
 		AuthorizationModule,
 		SalesModule,
 		SuppliersModule,
+		BonificationsModule,
 	],
 })
 export class AppModule {}
