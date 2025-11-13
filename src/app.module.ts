@@ -12,6 +12,7 @@ import { RewardsModule } from './modules/rewards/rewards.module';
 import { AuthorizationModule } from './modules/authorization/authorization.module';
 import { SalesModule } from './modules/sales/sales.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { CustomersModule } from './modules/customers/customers.module';
 import { BonificationsModule } from './modules/bonifications/bonifications.module';
 
 @Module({
@@ -29,6 +30,7 @@ import { BonificationsModule } from './modules/bonifications/bonifications.modul
 		SalesModule,
 		SuppliersModule,
 		BonificationsModule,
+		CustomersModule,
 	],
 })
 export class AppModule {}
