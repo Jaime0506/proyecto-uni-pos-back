@@ -20,7 +20,7 @@ export class SalesService {
 
 		@InjectRepository(SaleItem)
 		private readonly saleItemRepository: Repository<SaleItem>,
-	) {}
+	) { }
 
 	async getAllSales(getSalesDto: GetAllSalesDto) {
 		const { companyId, storeId } = getSalesDto;
@@ -108,8 +108,8 @@ export class SalesService {
 
 		return processTransaction(this.dataSource, async (queryRunner) => {
 			const sale = queryRunner.manager.create(Sale, {
-				company_id: 1,
-				store_id: 1,
+				company_id: createSaleDto.companyId,
+				store_id: createSaleDto.storeId,
 				user_id: userId,
 				customer_id: createSaleDto.customerId,
 				campaign_id: createSaleDto.campaignId ?? null,
