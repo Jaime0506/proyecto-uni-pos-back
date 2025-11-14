@@ -5,6 +5,8 @@ import { GetAllSalesDto } from './dto/get-all-sales-dto';
 import { Customer } from './entities/customer.entity';
 import { Sale } from './entities/sale.entity';
 import { SaleItem } from './entities/sale-items.entity';
+import { Bonus } from './entities/bonuses.entity';
+import { Product } from '../products/entities/product.entity';
 import { processTransaction } from 'src/database/transactions';
 
 @Injectable()
@@ -20,6 +22,12 @@ export class SalesService {
 
 		@InjectRepository(SaleItem)
 		private readonly saleItemRepository: Repository<SaleItem>,
+
+		@InjectRepository(Bonus)
+		private readonly bonusRepository: Repository<Bonus>,
+
+		@InjectRepository(Product)
+		private readonly productRepository: Repository<Product>,
 	) { }
 
 	async getAllSales(getSalesDto: GetAllSalesDto) {
@@ -134,6 +142,42 @@ export class SalesService {
 			}));
 
 			await queryRunner.manager.insert(SaleItem, saleItems);
+
+			// Actualizar stock de productos
+			for (const product of createSaleDto.products) {
+				const productEntity = await queryRunner.manager.findOne(Product, {
+					where: { id: product.id },
+				});
+
+				if (productEntity) {
+					// Restar la cantidad vendida del stock
+					productEntity.stock = productEntity.stock - product.quantity;
+					await queryRunner.manager.save(Product, productEntity);
+				}
+			}
+
+			// Proceso de bonificación
+			if (createSaleDto.customerId) {
+
+				// Buscar si ya existe una bonificación para este cliente
+				const existingBonus = await queryRunner.manager.findOne(Bonus, {
+					where: { customer_id: createSaleDto.customerId },
+				});
+
+				if (existingBonus) {
+					// Actualizar la bonificación existente sumando el nuevo monto
+					existingBonus.total_amount = Number(existingBonus.total_amount) + (createSaleDto.discount_total || 0);
+					existingBonus.updated_at = new Date();
+					await queryRunner.manager.save(Bonus, existingBonus);
+				} else {
+					// Crear una nueva bonificación
+					const newBonus = queryRunner.manager.create(Bonus, {
+						customer_id: createSaleDto.customerId,
+						total_amount: createSaleDto.discount_total || 0,
+					});
+					await queryRunner.manager.save(Bonus, newBonus);
+				}
+			}
 
 			return {
 				message: 'Venta creada exitosamente',
