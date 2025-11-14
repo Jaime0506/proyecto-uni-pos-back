@@ -29,6 +29,7 @@ export class ProductsService {
 	}
 
 	async uploadProducts(body: any, file: Express.Multer.File) {
+		console.log('ESTOY EN uploadProducts', body);
 		try {
 			const fileExtension =
 				file.originalname.split('.').pop()?.toLowerCase() || '';
@@ -42,7 +43,7 @@ export class ProductsService {
 			let products: any[] = [];
 
 			if (fileExtension === 'csv') {
-				products = await this.uploadProductsByFile(file);
+				products = await this.uploadProductsByFile(file, body.companyId);
 			}
 
 			try {
@@ -67,7 +68,10 @@ export class ProductsService {
 		return semicolonCount > commaCount ? ';' : ',';
 	}
 
-	async uploadProductsByFile(file: Express.Multer.File): Promise<any[]> {
+	async uploadProductsByFile(
+		file: Express.Multer.File,
+		companyId: number,
+	): Promise<any[]> {
 		console.log('ESTOY EN uploadProductsByFile', file);
 
 		let resultArray: any[] = [];
@@ -94,7 +98,7 @@ export class ProductsService {
 							purchasePrice: +data.precio_compra,
 							salePrice: +data.precio_venta,
 							stock: +data.stock,
-							company: { id: 1 },
+							company: { id: companyId },
 							createdAt: new Date(),
 							updatedAt: new Date(),
 						});
