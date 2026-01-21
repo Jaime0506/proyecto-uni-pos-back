@@ -136,4 +136,30 @@ export class RedisService {
 	async ttl(key: string): Promise<number> {
 		return await this.redis.ttl(key);
 	}
+
+	/**
+	 * Busca keys que coinciden con un patrón usando SCAN
+	 * @param pattern - El patrón a buscar (ej: 'user:*', 'products:*')
+	 * @returns Promise que resuelve con un array de keys encontradas
+	 */
+	async scanKeys(pattern: string): Promise<string[]> {
+		const keys: string[] = [];
+		let cursor = '0';
+
+		do {
+			const [nextCursor, batch] = await this.redis.scan(
+				cursor,
+				'MATCH',
+				pattern,
+				'COUNT',
+				100,
+			);
+			cursor = nextCursor;
+			if (batch && batch.length > 0) {
+				keys.push(...batch);
+			}
+		} while (cursor !== '0');
+
+		return keys;
+	}
 }

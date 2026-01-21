@@ -14,12 +14,14 @@ import { SalesModule } from './modules/sales/sales.module';
 import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { BonificationsModule } from './modules/bonifications/bonifications.module';
+import { CacheModule } from './modules/cache/cache.module';
 
 @Module({
 	imports: [
 		ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
 		TypeOrmModule.forRootAsync(typeOrmConfig),
 		RedisModule,
+		CacheModule,
 		AuthModule,
 		UsersModule,
 		ProductsModule,
