@@ -28,12 +28,10 @@ export class SalesService {
 
 		@InjectRepository(Product)
 		private readonly productRepository: Repository<Product>,
-	) { }
+	) {}
 
 	async getAllSales(getSalesDto: GetAllSalesDto) {
 		const { companyId, storeId } = getSalesDto;
-
-		console.log('BODY EN getAllSales', getSalesDto);
 
 		const result = await this.saleRepository
 			.createQueryBuilder('s')
@@ -104,16 +102,12 @@ export class SalesService {
 	}
 
 	async getAllCustomers(companyId?: number) {
-		console.log('BODY EN getAllCustomers', companyId);
-
 		return await this.customerRepository.find({
 			where: companyId ? { companyId } : {},
 		});
 	}
 
 	async createSale(createSaleDto: any, userId: string) {
-		console.log('createSaleDto', createSaleDto);
-
 		return processTransaction(this.dataSource, async (queryRunner) => {
 			const sale = queryRunner.manager.create(Sale, {
 				company_id: createSaleDto.companyId,
@@ -158,7 +152,6 @@ export class SalesService {
 
 			// Proceso de bonificación
 			if (createSaleDto.customerId) {
-
 				// Buscar si ya existe una bonificación para este cliente
 				const existingBonus = await queryRunner.manager.findOne(Bonus, {
 					where: { customer_id: createSaleDto.customerId },
@@ -166,7 +159,9 @@ export class SalesService {
 
 				if (existingBonus) {
 					// Actualizar la bonificación existente sumando el nuevo monto
-					existingBonus.total_amount = Number(existingBonus.total_amount) + (createSaleDto.discount_total || 0);
+					existingBonus.total_amount =
+						Number(existingBonus.total_amount) +
+						(createSaleDto.discount_total || 0);
 					existingBonus.updated_at = new Date();
 					await queryRunner.manager.save(Bonus, existingBonus);
 				} else {

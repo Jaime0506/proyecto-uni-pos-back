@@ -15,6 +15,7 @@ import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { CustomersModule } from './modules/customers/customers.module';
 import { BonificationsModule } from './modules/bonifications/bonifications.module';
 import { CacheModule } from './modules/cache/cache.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
 	imports: [
@@ -33,6 +34,7 @@ import { CacheModule } from './modules/cache/cache.module';
 		SuppliersModule,
 		BonificationsModule,
 		CustomersModule,
+		ReportsModule,
 	],
 })
 export class AppModule {}

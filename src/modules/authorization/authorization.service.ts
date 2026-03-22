@@ -626,7 +626,6 @@ export class AuthorizationService {
 				// Invalidar el cache de cada usuario que tiene este rol
 				await Promise.all(
 					userRolesWithThisRole.map(async (userRole) => {
-						console.log('Invalidando cache de usuario', userRole.userId);
 						await this.permissionResolver.invalidate(userRole.userId, null);
 					}),
 				);

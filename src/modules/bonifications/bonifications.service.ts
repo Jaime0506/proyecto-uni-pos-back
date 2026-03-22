@@ -17,20 +17,14 @@ export class BonificationsService {
 		private readonly bonusRepository: Repository<Bonus>,
 		@InjectRepository(Customer)
 		private readonly customerRepository: Repository<Customer>,
-	) { }
+	) {}
 
 	// Obtener todas las bonificaciones
 	async getAllBonifications(dto: GetAllBonificationsDto) {
-		console.log(dto);
-
 		try {
 			const query = this.bonusRepository
 				.createQueryBuilder('bonus')
-				.leftJoin(
-					Customer,
-					'customer',
-					'customer.id = bonus.customer_id',
-				)
+				.leftJoin(Customer, 'customer', 'customer.id = bonus.customer_id')
 				.select([
 					'bonus.id',
 					'bonus.customer_id',
@@ -157,4 +151,3 @@ export class BonificationsService {
 		}
 	}
 }
-

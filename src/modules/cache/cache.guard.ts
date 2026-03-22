@@ -46,9 +46,11 @@ export class CacheGuard implements CanActivate {
 		this.logger.debug(`Cache MISS: ${key}`);
 		const originalJson = response.json as (body: unknown) => unknown;
 		response.json = (body: unknown) => {
-			this.cacheService.set(key, body, cacheOptions.ttl).catch((error) => {
-				this.logger.warn(`Failed to cache response for key ${key}:`, error);
-			});
+			this.cacheService
+				.set(key, body as any, cacheOptions.ttl)
+				.catch((error) => {
+					this.logger.warn(`Failed to cache response for key ${key}:`, error);
+				});
 			return originalJson.call(response, body);
 		};
 

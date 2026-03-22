@@ -1,28 +1,16 @@
-import {
-	Body,
-	Controller,
-	HttpCode,
-	Patch,
-	Post,
-	UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
 import { BonificationsService } from './bonifications.service';
 import { GetAllBonificationsDto } from './dto/get-all-bonifications.dto';
 import { UpdateBonificationDto } from './dto/update-bonification.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth } from '@nestjs/swagger';
-import {
-	PermissionGuard,
-	RequirePermissions,
-} from '../auth/authorization-guard';
+import { PermissionGuard } from '../auth/authorization-guard';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 @Controller('bonifications')
 export class BonificationsController {
-	constructor(
-		private readonly bonificationsService: BonificationsService,
-	) { }
+	constructor(private readonly bonificationsService: BonificationsService) {}
 
 	// Obtener todas las bonificaciones
 	@Post('get-all')
@@ -39,8 +27,6 @@ export class BonificationsController {
 	// @RequirePermissions(['bonification:update'])
 	@HttpCode(200)
 	async updateBonification(@Body() dto: UpdateBonificationDto) {
-		console.log('UPDATE BONIFICATION', dto);
 		return await this.bonificationsService.updateBonification(dto);
 	}
 }
-
