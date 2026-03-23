@@ -34,32 +34,35 @@ export class CacheService {
 		}
 	}
 
-	async invalidate(keys?: string[], patterns?: string[]): Promise<number> {
-		let totalDeleted = 0;
+	async invalidate(keys?: string[], patterns?: string[]): Promise<string[]> {
+		const deletedKeys: string[] = [];
 
 		if (keys && keys.length > 0) {
 			try {
-				totalDeleted += await this.redisService.del(...keys);
+				const count = await this.redisService.del(...keys);
+				if (count > 0) deletedKeys.push(...keys);
 			} catch (error) {
 				this.logger.warn('Cache invalidate failed for keys:', error);
 			}
 		}
 
 		if (patterns && patterns.length > 0) {
-			totalDeleted += await this.invalidateByPatterns(patterns);
+			const patternDeleted = await this.invalidateByPatterns(patterns);
+			deletedKeys.push(...patternDeleted);
 		}
 
-		return totalDeleted;
+		return deletedKeys;
 	}
 
-	private async invalidateByPatterns(patterns: string[]): Promise<number> {
-		let totalDeleted = 0;
+	private async invalidateByPatterns(patterns: string[]): Promise<string[]> {
+		const deletedKeys: string[] = [];
 
 		for (const pattern of patterns) {
 			try {
 				const keys = await this.redisService.scanKeys(pattern);
 				if (keys.length > 0) {
-					totalDeleted += await this.redisService.del(...keys);
+					await this.redisService.del(...keys);
+					deletedKeys.push(...keys);
 				}
 			} catch (error) {
 				this.logger.warn(
@@ -69,7 +72,7 @@ export class CacheService {
 			}
 		}
 
-		return totalDeleted;
+		return deletedKeys;
 	}
 
 	generateKey(options: CacheOptions, req: Request, userId?: string): string {

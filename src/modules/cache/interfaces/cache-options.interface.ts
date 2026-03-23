@@ -12,12 +12,8 @@ export interface CacheOptions {
 	condition?: (req: Request) => boolean;
 }
 
-export interface CacheInvalidateOptions {
-	keys?: string[];
+export interface CacheInvalidateOptions extends Partial<CacheOptions> {
+	caches?: Partial<CacheOptions>[];
 	patterns?: string[];
-	params?: string[];
-	query?: string[];
-	body?: string[];
-	headers?: string[];
-	userFields?: string[];
+	keys?: string[];
 }

@@ -27,6 +27,32 @@ export class CacheKeyGenerator {
 			});
 		}
 
+		if (options.params && req.params) {
+			options.params.forEach((param) => {
+				const value = req.params[param];
+				if (value !== undefined && value !== null) {
+					parts.push(`${param}:${String(value)}`);
+				}
+			});
+		}
+
+		if (options.query && req.query) {
+			options.query.forEach((param) => {
+				const value = req.query[param];
+				if (value !== undefined && value !== null) {
+					let stringValue: string;
+					if (Array.isArray(value)) {
+						stringValue = value.map((v: any) => String(v)).join(',');
+					} else if (typeof value === 'object') {
+						stringValue = JSON.stringify(value);
+					} else {
+						stringValue = String(value);
+					}
+					parts.push(`${param}:${stringValue}`);
+				}
+			});
+		}
+
 		if (options.body && req.body) {
 			options.body.forEach((field) => {
 				const body = req.body as Record<string, unknown>;

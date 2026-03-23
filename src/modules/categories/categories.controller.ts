@@ -20,6 +20,8 @@ import {
 import { CreateCategoryDto } from './dtos/create-category.dto';
 import { UpdateCategoryDto } from './dtos/update-category.dto';
 import { GetCategoriesDto } from './dtos/get-categories.dto';
+import { Cache } from '../cache/decorators/cache.decorator';
+import { CacheInvalidate } from '../cache/decorators/cache-invalidate.decorator';
 
 @ApiTags('Categories')
 @ApiBearerAuth()
@@ -37,6 +39,11 @@ export class CategoriesController {
 
 	@Get('get-all')
 	@RequirePermissions(['category:read'])
+	@Cache({
+		key: 'categories:all',
+		ttl: '12H',
+		query: ['companyId'],
+	})
 	@ApiOperation({ summary: 'Obtener todas las categorías de una compañía' })
 	getAllCategories(@Query() getCategoriesDto: GetCategoriesDto) {
 		return this.categoriesService.getAllCategories(getCategoriesDto);
@@ -52,6 +59,10 @@ export class CategoriesController {
 	@Patch('update/:id')
 	@RequirePermissions(['category:update'])
 	@ApiOperation({ summary: 'Actualizar una categoría' })
+	@CacheInvalidate({
+		key: 'categories:all',
+		body: ['companyId'],
+	})
 	updateCategory(
 		@Param('id', ParseIntPipe) id: number,
 		@Body() updateCategoryDto: UpdateCategoryDto,
