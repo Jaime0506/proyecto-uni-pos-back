@@ -15,4 +15,3 @@ import { Customer } from '../sales/entities/customer.entity';
 	providers: [BonificationsService],
 })
 export class BonificationsModule {}
-

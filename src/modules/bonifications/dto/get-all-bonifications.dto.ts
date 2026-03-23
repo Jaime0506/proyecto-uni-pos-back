@@ -7,4 +7,3 @@ export class GetAllBonificationsDto {
 	@IsNumber()
 	customerId?: number;
 }
-

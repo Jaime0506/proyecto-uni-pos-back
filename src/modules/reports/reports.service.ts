@@ -23,20 +23,29 @@ export class ReportsService {
 	// Utilidad generadora de CSV
 	private generateCsv(data: any[], headers: string[]): string {
 		if (!data || data.length === 0) {
-			return headers.join(',') + '\n';
+			return headers.join(';') + '\n';
 		}
 
 		const csvRows: string[] = [];
-		csvRows.push(headers.join(','));
+		csvRows.push(headers.join(';'));
 
 		for (const row of data) {
 			const values = headers.map((header) => {
 				const val =
 					row[header] !== null && row[header] !== undefined ? row[header] : '';
-				// Escapar comillas dobles y envolver en comillas si hay comas o saltos de línea
-				const strVal = String(val);
+
+				let strVal = String(val);
+
+				// Reemplazar punto por coma en valores decimales para correcta interpretación en Excel
+				if (typeof val === 'number') {
+					strVal = strVal.replace('.', ',');
+				} else if (typeof val === 'string' && /^-?\d*\.\d+$/.test(val)) {
+					strVal = strVal.replace('.', ',');
+				}
+
+				// Escapar comillas dobles y envolver en comillas si hay punto y coma o saltos de línea
 				if (
-					strVal.includes(',') ||
+					strVal.includes(';') ||
 					strVal.includes('"') ||
 					strVal.includes('\n')
 				) {
@@ -44,7 +53,7 @@ export class ReportsService {
 				}
 				return strVal;
 			});
-			csvRows.push(values.join(','));
+			csvRows.push(values.join(';'));
 		}
 
 		return csvRows.join('\n');
@@ -94,8 +103,6 @@ export class ReportsService {
 
 		const [data, total] = await query.getManyAndCount();
 
-		console.log('data', data);
-
 		// Resumen total
 		const totalsQuery = query.clone();
 		totalsQuery.skip(0).take(undefined);
@@ -104,9 +111,7 @@ export class ReportsService {
 		const sumResult = await totalsQuery
 			.select('SUM(sale.total)', 'totalAmount')
 			.addSelect('SUM(sale.discount_total)', 'totalDiscount')
-			.getRawOne();
-
-		console.log('sumResult', sumResult);
+			.getRawOne<{ totalAmount: number; totalDiscount: number }>();
 
 		return {
 			ok: true,
@@ -159,7 +164,6 @@ export class ReportsService {
 		const data = await query.getMany();
 
 		const formattedData = data.map((sale) => ({
-			ID: sale.id,
 			Fecha: new Date(sale.created_at).toISOString().split('T')[0],
 			Hora: new Date(sale.created_at)
 				.toISOString()
@@ -179,7 +183,6 @@ export class ReportsService {
 		}));
 
 		const headers = [
-			'ID',
 			'Fecha',
 			'Hora',
 			'Sucursal',

@@ -17,4 +17,3 @@ export class UpdateBonificationDto {
 	@IsNumber()
 	total_amount?: number;
 }
-
