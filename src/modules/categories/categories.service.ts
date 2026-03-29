@@ -81,6 +81,55 @@ export class CategoriesService {
 	}
 
 	// Obtener categorías (y opcionalmente anidadas)
+	async getAllCategoriesAdminInternal() {
+		try {
+			const categories = await this.categoryRepository
+				.createQueryBuilder('category')
+				.withDeleted()
+				.leftJoin('category.company', 'company')
+				.leftJoinAndSelect('category.children', 'children')
+				.select([
+					'category.id',
+					'category.companyId',
+					'category.name',
+					'category.parentId',
+					'category.createdAt',
+					'category.updatedAt',
+					'category.deletedAt',
+					'company.name',
+					'children.id',
+					'children.companyId',
+					'children.name',
+					'children.parentId',
+					'children.createdAt',
+					'children.updatedAt',
+					'children.deletedAt',
+				])
+				.orderBy('category.name', 'ASC')
+				.getMany();
+
+			const result = categories.map((cat) => {
+				const { company, ...rest } = cat;
+				return {
+					...rest,
+					companyName: company?.name || '',
+				};
+			});
+
+			return {
+				ok: true,
+				message: 'Categorías obtenidas correctamente',
+				data: { result },
+			};
+		} catch (error) {
+			console.error(error);
+			throw new InternalServerErrorException(
+				'Error interno al obtener categorías.',
+			);
+		}
+	}
+
+	// Obtener categorías (y opcionalmente anidadas)
 	async getAllCategories(dto: GetCategoriesDto) {
 		try {
 			const query = this.categoryRepository
@@ -206,10 +255,10 @@ export class CategoriesService {
 	}
 
 	// Eliminar (soft delete) y revisar hijos
-	async deleteCategory(id: number) {
+	async deleteCategory(id: number, companyId: number) {
 		try {
 			const category = await this.categoryRepository.findOne({
-				where: { id },
+				where: { id, companyId },
 				relations: ['children'],
 			});
 			if (!category) {

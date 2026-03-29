@@ -55,7 +55,7 @@ export class ProductsService {
 		file: Express.Multer.File,
 		companyId: number,
 	): Promise<any[]> {
-		let resultArray: any[] = [];
+		const resultArray: any[] = [];
 
 		await new Promise<void>((resolve, reject) => {
 			const separator = this.detectCSVSeparator(file.buffer);
