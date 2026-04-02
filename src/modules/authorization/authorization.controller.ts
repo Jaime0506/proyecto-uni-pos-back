@@ -36,8 +36,6 @@ export class AuthorizationController {
 	// Obtener todos los roles y permisos del usuario
 	@Get('get-all-roles-and-permissions-by-user-id')
 	@HttpCode(200)
-	@UseGuards(PermissionGuard)
-	@RequirePermissions({ anyOf: ['role:read', 'permission:read'] }) // Puede leer roles o permisos
 	async getAllRolesAndPermissionsByUserId(
 		@Req() req: Request & { user: RequestUser },
 	) {
@@ -141,8 +139,8 @@ export class AuthorizationController {
 	// Actualizar un rol
 	@Patch('roles/update')
 	@HttpCode(200)
-	@UseGuards(PermissionGuard)
-	@RequirePermissions(['role:update']) // Puede actualizar roles
+	// @UseGuards(PermissionGuard)
+	// @RequirePermissions(['role:update']) // Puede actualizar roles
 	async updateRole(@Body() dto: UpdateRoleDto) {
 		return await this.authorizationService.updateRole(dto);
 	}

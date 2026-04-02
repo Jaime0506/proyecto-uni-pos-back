@@ -18,6 +18,8 @@ import {
 	PermissionGuard,
 	RequirePermissions,
 } from '../auth/authorization-guard';
+import { Cache } from '../cache/decorators/cache.decorator';
+import { CacheInvalidate } from '../cache/decorators/cache-invalidate.decorator';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -28,7 +30,11 @@ export class CompanyController {
 	// Obtener todas las compañías (incluyendo desactivadas)
 	@Get('get-all-companies')
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['company:read'])
+	@RequirePermissions(['company_admin:read'])
+	@Cache({
+		key: 'companies:all',
+		ttl: '1d',
+	})
 	@HttpCode(200)
 	async getAllCompanies() {
 		return await this.companyService.getAllCompanies();
@@ -37,7 +43,10 @@ export class CompanyController {
 	// Crear una nueva compañía
 	@Post('create-company')
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['company:create'])
+	@RequirePermissions(['company_admin:create'])
+	@CacheInvalidate({
+		keys: ['companies:all'],
+	})
 	@HttpCode(200)
 	async createCompany(@Body() dto: CreateCompanyDto) {
 		return await this.companyService.createCompany(dto);
@@ -46,7 +55,10 @@ export class CompanyController {
 	// Actualizar una compañía
 	@Patch('update-company')
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['company:update'])
+	@RequirePermissions(['company_admin:update'])
+	@CacheInvalidate({
+		keys: ['companies:all'],
+	})
 	@HttpCode(200)
 	async updateCompany(@Body() dto: UpdateCompanyDto) {
 		return await this.companyService.updateCompany(dto);
@@ -55,7 +67,10 @@ export class CompanyController {
 	// Eliminar una compañía (soft delete)
 	@Delete('delete-company')
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['company:delete'])
+	@RequirePermissions(['company_admin:delete'])
+	@CacheInvalidate({
+		keys: ['companies:all'],
+	})
 	@HttpCode(200)
 	async deleteCompany(@Body() dto: DeleteCompanyDto) {
 		return await this.companyService.deleteCompany(dto);
