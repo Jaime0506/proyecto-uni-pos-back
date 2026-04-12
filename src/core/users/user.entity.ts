@@ -56,8 +56,11 @@ export class User {
 	updatedAt!: Date;
 
 	@DeleteDateColumn({ type: 'timestamptz', name: 'deleted_at', nullable: true })
-	deletedAt: Date | null;
+	deletedAt!: Date | null;
 
-	@Column('boolean', { name: 'is_super_root', default: () => 'false' })
+	@Column('boolean', {
+		name: 'is_super_root',
+		default: () => 'false',
+	})
 	isSuperRoot!: boolean;
 }

@@ -104,7 +104,9 @@ export class AuthorizationController {
 	@Get('roles/get-all-roles-admin')
 	@HttpCode(200)
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['role:read']) // Solo administradores
+	@RequirePermissions({
+		anyOf: ['role:read', 'role_admin:read'],
+	}) // Solo administradores
 	async getAllRolesAdmin() {
 		return await this.authorizationService.getAllRolesAdmin();
 	}

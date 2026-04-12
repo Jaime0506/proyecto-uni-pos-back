@@ -7,6 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Company } from '../companies/entities/company.entity';
 import { UserCompanyMembership } from './entities/user-company-membership.entity';
 import { Store } from '../stores/entities/store.entity';
+import { AuthorizationGuardModule } from '../auth/authorization-guard/authorization-guard.module';
 
 @Module({
 	imports: [
@@ -17,6 +18,7 @@ import { Store } from '../stores/entities/store.entity';
 			UserCompanyMembership,
 			Store,
 		]),
+		AuthorizationGuardModule,
 	],
 	controllers: [UsersController],
 	providers: [UserService],

@@ -117,6 +117,19 @@ export class UserService {
 	async getAllUsers() {
 		// Obtener todos los usuarios (incluyendo eliminados)
 		const users = await this.users.find({
+			select: [
+				'id',
+				'username',
+				'email',
+				'nationalId',
+				'isActive',
+				'phoneNumber',
+				'firstName',
+				'lastName',
+				'createdAt',
+				'updatedAt',
+				'deletedAt',
+			],
 			withDeleted: true,
 		});
 
@@ -172,27 +185,12 @@ export class UserService {
 							id: role.id,
 							companyId: role.companyId,
 							name: role.name,
-							description: role.description,
-							status: role.status,
-							deletedAt: role.deletedAt,
-							createdAt: role.createdAt,
-							updatedAt: role.updatedAt,
 						}
 					: null,
 				company: company
 					? {
 							id: company.id,
 							name: company.name,
-							nit: company.nit,
-							address: company.address,
-							dns: company.dns,
-							phone: company.phone,
-							email: company.email,
-							maxStores: company.maxStores,
-							status: company.status,
-							createdAt: company.createdAt,
-							updatedAt: company.updatedAt,
-							deletedAt: company.deletedAt,
 						}
 					: null,
 			};

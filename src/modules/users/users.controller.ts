@@ -21,9 +21,15 @@ import { DeleteDto } from './dtos/delete.dto';
 import { CreateUserWithRoleDto } from './dtos/create-user-with-role.dto';
 import { UpdateUserWithRoleDto } from './dtos/update-user-with-role.dto';
 import { RequestUser } from 'src/types/global';
+import {
+	PermissionGuard,
+	RequirePermissions,
+} from '../auth/authorization-guard';
+import { Cache } from '../cache/decorators/cache.decorator';
+import { CacheInvalidate } from '../cache/decorators/cache-invalidate.decorator';
 
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard)
 @Controller('users')
 export class UsersController {
 	constructor(private readonly users: UserService) {}
@@ -63,6 +69,11 @@ export class UsersController {
 	// Aquí irían los endpoints administrativos con @ApiTags('Users - Admin')
 	@ApiTags('Users - Admin')
 	@Get('admin/get-all-users')
+	@RequirePermissions(['user_admin:read'])
+	// @Cache({
+	// 	key: 'users:all',
+	// 	ttl: '1d',
+	// })
 	@HttpCode(200)
 	async getAllUsers() {
 		return this.users.getAllUsers();
@@ -70,6 +81,7 @@ export class UsersController {
 
 	@ApiTags('Users - Admin')
 	@Get('admin/get-user-by-id/:id')
+	@RequirePermissions(['user_admin:read'])
 	@HttpCode(200)
 	async getUserById(@Param('id') id: string) {
 		return await this.users.getUserById(id);
@@ -77,6 +89,10 @@ export class UsersController {
 
 	@ApiTags('Users - Admin')
 	@Post('admin/create-user')
+	@RequirePermissions(['user_admin:create'])
+	@CacheInvalidate({
+		keys: ['users:all'],
+	})
 	@HttpCode(200)
 	async createUser(@Body() dto: CreateUserWithRoleDto) {
 		return await this.users.createUserWithRole(dto);
@@ -84,6 +100,10 @@ export class UsersController {
 
 	@ApiTags('Users - Admin')
 	@Patch('admin/update-user')
+	@RequirePermissions(['user_admin:update'])
+	@CacheInvalidate({
+		keys: ['users:all'],
+	})
 	@HttpCode(200)
 	async updateUser(@Body() dto: UpdateUserWithRoleDto) {
 		return await this.users.updateUserWithRole(dto);

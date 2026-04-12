@@ -315,6 +315,12 @@ export class AuthorizationService {
 		try {
 			const roles = await this.roleRepository.find({
 				withDeleted: true,
+				relations: ['company'],
+				select: {
+					company: {
+						name: true,
+					},
+				},
 			});
 
 			// Obtener todos los permisos para cada rol (incluyendo desactivados)
