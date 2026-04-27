@@ -602,4 +602,219 @@ export class UserService {
 			throw new InternalServerErrorException('Error al actualizar el usuario');
 		}
 	}
+
+	// ========== Sección: Users - Admin de Tienda ==========
+	async getStoreUsers(userId: string) {
+		// 1. Obtener la membresía del Admin de Tienda
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		const companyId = membership.companyId;
+
+		// 2. Obtener todas las membresías activas para esa compañía
+		const userMemberships = await this.userCompanyMembershipRepository.find({
+			where: { companyId, isActive: true },
+			relations: ['company'],
+		});
+
+		const userIds = userMemberships.map((m) => m.userId);
+
+		if (userIds.length === 0) {
+			return {
+				ok: true,
+				message: 'Usuarios obtenidos correctamente',
+				data: { result: [] },
+			};
+		}
+
+		// 3. Obtener los usuarios de esa compañía (incluyendo eliminados)
+		const users = await this.users.find({
+			where: userIds.map((id) => ({ id })),
+			select: [
+				'id',
+				'username',
+				'email',
+				'nationalId',
+				'isActive',
+				'phoneNumber',
+				'firstName',
+				'lastName',
+				'createdAt',
+				'updatedAt',
+				'deletedAt',
+			],
+			withDeleted: true,
+		});
+
+		// 4. Obtener roles de los usuarios de esa compañía
+		const userRoles = await this.userRoleRepository.find({
+			where: userIds.map((id) => ({ userId: id, status: StatusEnum.ACTIVE })),
+			relations: ['role'],
+			order: { createdAt: 'DESC' },
+		});
+
+		// Crear mapa de userId -> role
+		const userRoleMap = new Map<string, Role>();
+		userRoles.forEach((userRole) => {
+			if (!userRoleMap.has(userRole.userId) && userRole.role) {
+				userRoleMap.set(userRole.userId, userRole.role);
+			}
+		});
+
+		// 5. Formatear
+		const company = userMemberships[0].company; // Todos comparten la misma compañía
+		const usersWithRoles = users.map((user) => {
+			const role = userRoleMap.get(user.id);
+			return {
+				...user,
+				role: role
+					? {
+							id: role.id,
+							companyId: role.companyId,
+							name: role.name,
+						}
+					: null,
+				company: company
+					? {
+							id: company.id,
+							name: company.name,
+						}
+					: null,
+			};
+		});
+
+		return {
+			ok: true,
+			message: 'Usuarios obtenidos correctamente',
+			data: { result: usersWithRoles },
+		};
+	}
+
+	async getStoreUserById(id: string, requesterUserId: string) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId: requesterUserId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		const targetUserMembership =
+			await this.userCompanyMembershipRepository.findOne({
+				where: { userId: id, companyId: membership.companyId, isActive: true },
+			});
+
+		if (!targetUserMembership) {
+			throw new UnauthorizedException(
+				'No tienes permisos para ver a este usuario',
+			);
+		}
+
+		const user = await this.users.findOne({ where: { id }, withDeleted: true });
+		if (!user) throw new UnauthorizedException('Usuario no encontrado');
+
+		return {
+			ok: true,
+			message: 'Usuario obtenido correctamente',
+			data: { result: user },
+		};
+	}
+
+	async createStoreUserWithRole(
+		dto: CreateUserWithRoleDto,
+		requesterUserId: string,
+	) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId: requesterUserId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		// Forzar el companyId al del admin de tienda
+		dto.companyId = membership.companyId;
+
+		// Si envió un rol, validamos que pertenezca a la misma compañía
+		if (dto.roleId) {
+			const role = await this.dataSource.getRepository(Role).findOne({
+				where: {
+					id: dto.roleId,
+					companyId: membership.companyId,
+					status: StatusEnum.ACTIVE,
+				},
+			});
+			if (!role) {
+				throw new BadRequestException(
+					'El rol no es válido o no pertenece a la compañía',
+				);
+			}
+		}
+
+		// Reutilizar lógica existente que ya maneja la creación de usuario, membresía y rol
+		return this.createUserWithRole(dto);
+	}
+
+	async updateStoreUserWithRole(
+		dto: UpdateUserWithRoleDto,
+		requesterUserId: string,
+	) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId: requesterUserId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		// Validar que el usuario objetivo pertenece a la compañía del admin
+		const targetUserMembership =
+			await this.userCompanyMembershipRepository.findOne({
+				where: {
+					userId: dto.id_user,
+					companyId: membership.companyId,
+					isActive: true,
+				},
+			});
+
+		if (!targetUserMembership) {
+			throw new UnauthorizedException(
+				'No tienes permisos para actualizar a este usuario',
+			);
+		}
+
+		// Forzar el companyId
+		dto.companyId = membership.companyId;
+
+		// Validar que el rol (si se actualiza) pertenezca a la compañía
+		if (dto.roleId) {
+			const role = await this.dataSource.getRepository(Role).findOne({
+				where: {
+					id: dto.roleId,
+					companyId: membership.companyId,
+					status: StatusEnum.ACTIVE,
+				},
+			});
+			if (!role) {
+				throw new BadRequestException(
+					'El rol no es válido o no pertenece a la compañía',
+				);
+			}
+		}
+
+		return this.updateUserWithRole(dto);
+	}
 }

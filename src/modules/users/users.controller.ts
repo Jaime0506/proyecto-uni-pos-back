@@ -115,4 +115,46 @@ export class UsersController {
 	async getUserCompanyAndStores(@Req() req: Request & { user: RequestUser }) {
 		return await this.users.getUserCompanyAndStores(req.user.userId);
 	}
+
+	// ========== Sección: Users - Admin de Tienda ==========
+	@ApiTags('Users - Store Admin')
+	@Get('store/get-all-users')
+	@RequirePermissions(['user:read'])
+	@HttpCode(200)
+	async getStoreUsers(@Req() req: Request & { user: RequestUser }) {
+		return this.users.getStoreUsers(req.user.userId);
+	}
+
+	@ApiTags('Users - Store Admin')
+	@Get('store/get-user-by-id/:id')
+	@RequirePermissions(['user:read'])
+	@HttpCode(200)
+	async getStoreUserById(
+		@Param('id') id: string,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.getStoreUserById(id, req.user.userId);
+	}
+
+	@ApiTags('Users - Store Admin')
+	@Post('store/create-user')
+	@RequirePermissions(['user:create'])
+	@HttpCode(200)
+	async createStoreUser(
+		@Body() dto: CreateUserWithRoleDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.createStoreUserWithRole(dto, req.user.userId);
+	}
+
+	@ApiTags('Users - Store Admin')
+	@Patch('store/update-user')
+	@RequirePermissions(['user:update'])
+	@HttpCode(200)
+	async updateStoreUser(
+		@Body() dto: UpdateUserWithRoleDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.updateStoreUserWithRole(dto, req.user.userId);
+	}
 }

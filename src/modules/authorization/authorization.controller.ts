@@ -112,10 +112,23 @@ export class AuthorizationController {
 	}
 
 	// Obtener todos los roles de una compañía
+	@Get('roles/get-all-admin/:id_company')
+	@HttpCode(200)
+	@UseGuards(PermissionGuard)
+	@RequirePermissions(['role_admin:read']) // Puede leer roles
+	async getAllRolesAdminByCompany(
+		@Param('id_company', ParseIntPipe) id_company: number,
+	) {
+		return await this.authorizationService.getAllRoles(id_company);
+	}
+
+	// Obtener todos los roles de una compañía
 	@Get('roles/get-all/:id_company')
 	@HttpCode(200)
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['role:read']) // Puede leer roles
+	@RequirePermissions({
+		anyOf: ['role:read', 'role_admin:read'],
+	}) // Puede leer roles
 	async getAllRoles(@Param('id_company', ParseIntPipe) id_company: number) {
 		return await this.authorizationService.getAllRoles(id_company);
 	}
