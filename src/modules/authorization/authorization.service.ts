@@ -22,6 +22,7 @@ import { RequestUser } from 'src/types/global';
 import { User } from 'src/core/users/user.entity';
 import { UserRole } from './entities/user-role.entity';
 import { MyPermissionResolverService } from '../auth/authorization-guard/my-permission-resolver.service';
+import { UserCompanyMembership } from '../users/entities/user-company-membership.entity';
 
 @Injectable()
 export class AuthorizationService {
@@ -37,6 +38,8 @@ export class AuthorizationService {
 		private readonly userRepository: Repository<User>,
 		@InjectRepository(UserRole)
 		private readonly userRoleRepository: Repository<UserRole>,
+		@InjectRepository(UserCompanyMembership)
+		private readonly userCompanyMembershipRepository: Repository<UserCompanyMembership>,
 		private readonly permissionResolver: MyPermissionResolverService,
 	) {}
 
@@ -702,5 +705,118 @@ export class AuthorizationService {
 			console.error(error);
 			throw new InternalServerErrorException('Error al eliminar el rol');
 		}
+	}
+
+	// --- Store Methods ---
+
+	async getStoreRoles(userId: string) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		return await this.getAllRoles(membership.companyId);
+	}
+
+	async getStoreRoleById(id: number, userId: string) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		const role = await this.roleRepository.findOne({
+			where: { id, companyId: membership.companyId, status: StatusEnum.ACTIVE },
+			relations: ['company'],
+		});
+
+		if (!role) {
+			throw new UnauthorizedException('No tienes permisos para ver este rol');
+		}
+
+		return {
+			ok: true,
+			message: 'Rol obtenido correctamente',
+			data: { result: role },
+		};
+	}
+
+	async createStoreRole(dto: CreateRoleDto, userId: string) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		// Forzar companyId
+		dto.companyId = membership.companyId;
+
+		return await this.createRole(dto);
+	}
+
+	async updateStoreRole(dto: UpdateRoleDto, userId: string) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		// Validar que el rol pertenece a la compañía
+		const existingRole = await this.roleRepository.findOne({
+			where: { id: dto.id, companyId: membership.companyId },
+		});
+
+		if (!existingRole) {
+			throw new UnauthorizedException(
+				'No tienes permisos para actualizar este rol',
+			);
+		}
+
+		// Forzar companyId
+		dto.companyId = membership.companyId;
+
+		return await this.updateRole(dto);
+	}
+
+	async deleteStoreRole(dto: DeleteRoleDto, userId: string) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		// Validar que el rol pertenece a la compañía
+		const existingRole = await this.roleRepository.findOne({
+			where: { id: dto.id, companyId: membership.companyId },
+		});
+
+		if (!existingRole) {
+			throw new UnauthorizedException(
+				'No tienes permisos para eliminar este rol',
+			);
+		}
+
+		return await this.deleteRole(dto);
 	}
 }

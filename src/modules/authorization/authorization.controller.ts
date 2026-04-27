@@ -49,7 +49,7 @@ export class AuthorizationController {
 	@Get('permissions/get-all-permissions-admin')
 	@HttpCode(200)
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['permission:read']) // Solo administradores
+	@RequirePermissions(['permission_admin:read']) // Solo administradores
 	async getAllPermissionsAdmin() {
 		return this.authorizationService.getAllPermissionsAdmin();
 	}
@@ -167,5 +167,73 @@ export class AuthorizationController {
 	@RequirePermissions(['role:delete']) // Puede eliminar roles
 	async deleteRole(@Body() dto: DeleteRoleDto) {
 		return await this.authorizationService.deleteRole(dto);
+	}
+
+	// --- Store Endpoints ---
+
+	@Get('roles/store/get-all')
+	@HttpCode(200)
+	@RequirePermissions(['role:read'])
+	async getStoreRoles(@Req() req: Request & { user: RequestUser }) {
+		return await this.authorizationService.getStoreRoles(req.user.userId);
+	}
+
+	@Get('roles/store/get-by-id/:id')
+	@HttpCode(200)
+	@RequirePermissions(['role:read'])
+	async getStoreRoleById(
+		@Param('id', ParseIntPipe) id: number,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.authorizationService.getStoreRoleById(
+			id,
+			req.user.userId,
+		);
+	}
+
+	@Post('roles/store/create')
+	@HttpCode(200)
+	@RequirePermissions(['role:create'])
+	async createStoreRole(
+		@Body() dto: CreateRoleDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.authorizationService.createStoreRole(
+			dto,
+			req.user.userId,
+		);
+	}
+
+	@Patch('roles/store/update')
+	@HttpCode(200)
+	@RequirePermissions(['role:update'])
+	async updateStoreRole(
+		@Body() dto: UpdateRoleDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.authorizationService.updateStoreRole(
+			dto,
+			req.user.userId,
+		);
+	}
+
+	@Delete('roles/store/delete')
+	@HttpCode(200)
+	@RequirePermissions(['role:delete'])
+	async deleteStoreRole(
+		@Body() dto: DeleteRoleDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.authorizationService.deleteStoreRole(
+			dto,
+			req.user.userId,
+		);
+	}
+
+	@Get('permissions/store/get-all')
+	@HttpCode(200)
+	@RequirePermissions(['role:read']) // El admin de tienda puede ver permisos para asignarlos
+	async getStorePermissions() {
+		return await this.authorizationService.getAllPermissions();
 	}
 }
