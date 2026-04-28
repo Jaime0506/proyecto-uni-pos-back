@@ -113,6 +113,64 @@ export class UserService {
 		};
 	}
 
+	async deleteUserAdmin(dto: DeleteDto) {
+		const userToDelete = await this.users.findOne({
+			where: { id: dto.id_user },
+		});
+
+		if (!userToDelete) throw new BadRequestException('Usuario no encontrado');
+
+		userToDelete.deletedAt = new Date();
+		userToDelete.updatedAt = new Date();
+		userToDelete.isActive = false;
+
+		await this.users.save(userToDelete);
+
+		return {
+			ok: true,
+			message: 'Usuario desactivado correctamente',
+		};
+	}
+
+	async deleteStoreUser(dto: DeleteDto, requesterId: string) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId: requesterId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		const targetMembership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId: dto.id_user, companyId: membership.companyId },
+		});
+
+		if (!targetMembership) {
+			throw new UnauthorizedException(
+				'No tienes permisos para desactivar este usuario o no pertenece a tu compañía',
+			);
+		}
+
+		const userToDelete = await this.users.findOne({
+			where: { id: dto.id_user },
+		});
+
+		if (!userToDelete) throw new BadRequestException('Usuario no encontrado');
+
+		userToDelete.deletedAt = new Date();
+		userToDelete.updatedAt = new Date();
+		userToDelete.isActive = false;
+
+		await this.users.save(userToDelete);
+
+		return {
+			ok: true,
+			message: 'Usuario desactivado correctamente',
+		};
+	}
+
 	// ========== Sección: Users - Admin Interno ==========
 	async getAllUsers() {
 		// Obtener todos los usuarios (incluyendo eliminados)

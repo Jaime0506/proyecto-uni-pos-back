@@ -109,6 +109,17 @@ export class UsersController {
 		return await this.users.updateUserWithRole(dto);
 	}
 
+	@ApiTags('Users - Admin')
+	@Delete('admin/delete-user')
+	@RequirePermissions(['user_admin:delete'])
+	@CacheInvalidate({
+		keys: ['users:all'],
+	})
+	@HttpCode(200)
+	async deleteUserAdmin(@Body() dto: DeleteDto) {
+		return await this.users.deleteUserAdmin(dto);
+	}
+
 	@ApiTags('Users - Personal')
 	@Get('get-user-company-and-stores')
 	@HttpCode(200)
@@ -156,5 +167,16 @@ export class UsersController {
 		@Req() req: Request & { user: RequestUser },
 	) {
 		return await this.users.updateStoreUserWithRole(dto, req.user.userId);
+	}
+
+	@ApiTags('Users - Store Admin')
+	@Delete('store/delete-user')
+	@RequirePermissions(['user:delete'])
+	@HttpCode(200)
+	async deleteStoreUser(
+		@Body() dto: DeleteDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.deleteStoreUser(dto, req.user.userId);
 	}
 }

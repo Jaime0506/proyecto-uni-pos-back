@@ -146,7 +146,9 @@ export class AuthorizationController {
 	@Post('roles/create')
 	@HttpCode(200)
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['role:create']) // Puede crear roles
+	@RequirePermissions({
+		anyOf: ['role:create', 'role_admin:create'],
+	}) // Puede crear roles
 	async createRole(@Body() dto: CreateRoleDto) {
 		return await this.authorizationService.createRole(dto);
 	}
