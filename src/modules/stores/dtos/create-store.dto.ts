@@ -1,12 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import {
-	IsNotEmpty,
-	IsOptional,
-	IsString,
-	IsEmail,
-	IsInt,
-	Min,
-} from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsInt, Min } from 'class-validator';
 
 export class CreateStoreDto {
 	@ApiProperty({ description: 'El id de la compañía' })
@@ -32,6 +25,6 @@ export class CreateStoreDto {
 
 	@ApiPropertyOptional({ description: 'El email de la tienda' })
 	@IsOptional()
-	@IsEmail()
+	// @IsEmail()
 	email?: string;
 }
