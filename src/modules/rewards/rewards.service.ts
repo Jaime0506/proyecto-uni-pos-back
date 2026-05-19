@@ -99,9 +99,12 @@ export class RewardsService {
 		});
 	}
 
-	async getRewardRules(companyId?: number): Promise<RewardRule[]> {
+	async getRewardRules(
+		companyId: number,
+		storeId: number,
+	): Promise<RewardRule[]> {
 		return await this.rewardRuleRepository.find({
-			where: companyId ? { companyId } : {},
+			where: { companyId, storeId },
 			relations: [
 				'products',
 				'products.product',

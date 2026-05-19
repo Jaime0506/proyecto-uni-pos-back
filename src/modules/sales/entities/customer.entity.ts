@@ -11,13 +11,16 @@ import {
 @Entity({ name: 'customers', schema: 'sys' })
 export class Customer {
 	@PrimaryGeneratedColumn()
-	id: number;
+	id!: number;
 
 	@Column({ name: 'company_id' })
-	companyId: number;
+	companyId!: number;
+
+	@Column({ name: 'store_id' })
+	storeId!: number;
 
 	@Column({ name: 'national_id', type: 'varchar', length: 20 })
-	nationalId: string;
+	nationalId!: string;
 
 	@Column({ name: 'first_name', type: 'varchar', length: 100, nullable: true })
 	firstName?: string;
@@ -32,10 +35,10 @@ export class Customer {
 	email?: string;
 
 	@CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
-	createdAt: Date;
+	createdAt!: Date;
 
 	@UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
-	updatedAt: Date;
+	updatedAt!: Date;
 
 	@DeleteDateColumn({ name: 'deleted_at', type: 'timestamptz', nullable: true })
 	deletedAt?: Date;
@@ -46,5 +49,5 @@ export class Customer {
 		default: StatusEnum.ACTIVE,
 		name: 'status',
 	})
-	status: StatusEnum;
+	status!: StatusEnum;
 }

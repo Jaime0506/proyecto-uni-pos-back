@@ -17,46 +17,49 @@ import { ProductCategory } from './product-category.entity';
 @Index('products_company_barcode_idx', ['company', 'barcode'])
 export class Product {
 	@PrimaryGeneratedColumn()
-	id: number;
+	id!: number;
 
 	@ManyToOne(() => Company, { nullable: false })
 	@JoinColumn({ name: 'company_id' })
-	company: Company;
+	company!: Company;
 
 	@ManyToOne(() => ProductCategory, { nullable: true })
 	@JoinColumn({ name: 'category_id' })
-	category: ProductCategory;
+	category!: ProductCategory;
 
 	@Column({ type: 'varchar', length: 255 })
-	name: string;
+	name!: string;
 
 	@Column({ type: 'varchar', length: 80, nullable: true })
-	sku: string;
+	sku!: string;
 
 	@Column({ type: 'varchar', length: 80, nullable: true })
-	barcode: string;
+	barcode!: string;
 
 	@Column({ type: 'numeric', precision: 18, scale: 4, name: 'purchase_price' })
-	purchasePrice: number;
+	purchasePrice!: number;
 
 	@Column({ type: 'numeric', precision: 18, scale: 4, name: 'sale_price' })
-	salePrice: number;
+	salePrice!: number;
 
 	@Column({ type: 'boolean', default: false, name: 'tax_exempt' })
-	taxExempt: boolean;
+	taxExempt!: boolean;
 
 	@Column({ type: 'int', default: 0 })
-	stock: number;
+	stock!: number;
 
 	@CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
-	createdAt: Date;
+	createdAt!: Date;
 
 	@UpdateDateColumn({ type: 'timestamptz', name: 'updated_at' })
-	updatedAt: Date;
+	updatedAt!: Date;
 
 	@DeleteDateColumn({ type: 'timestamptz', name: 'deleted_at', nullable: true })
-	deletedAt: Date | null;
+	deletedAt!: Date | null;
 
 	@Column({ type: 'text' })
-	image: string;
+	image!: string;
+
+	@Column({ type: 'int', nullable: true, name: 'store_id' })
+	storeId!: number;
 }

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { GetAllSalesDto } from './dto/get-all-sales-dto';
@@ -8,6 +8,7 @@ import { SaleItem } from './entities/sale-items.entity';
 import { Bonus } from './entities/bonuses.entity';
 import { Product } from '../products/entities/product.entity';
 import { processTransaction } from 'src/database/transactions';
+import { CreateCustomerDto } from './dto/create-customer.dto';
 
 @Injectable()
 export class SalesService {
@@ -101,10 +102,69 @@ export class SalesService {
 		return groupedSales;
 	}
 
-	async getAllCustomers(companyId?: number) {
+	async getAllCustomers(companyId: number, storeId: number) {
+		const whereClause: any = {};
+		if (companyId !== undefined) {
+			whereClause.companyId = companyId;
+		}
+		if (storeId !== undefined) {
+			whereClause.storeId = storeId;
+		}
 		return await this.customerRepository.find({
-			where: companyId ? { companyId } : {},
+			where: whereClause,
 		});
+	}
+
+	// Buscar cliente por cédula exacta dentro de la empresa y tienda
+	async searchCustomerByNationalId(
+		nationalId: string,
+		companyId: number,
+		storeId: number,
+	): Promise<Customer[]> {
+		if (!nationalId || nationalId.trim().length < 6) {
+			throw new BadRequestException(
+				'La cédula debe tener al menos 6 caracteres para realizar la búsqueda.',
+			);
+		}
+
+		return this.customerRepository.find({
+			where: {
+				nationalId: nationalId.trim(),
+				companyId,
+				storeId,
+			},
+			take: 5,
+		});
+	}
+
+	// Crear un nuevo cliente en la empresa y tienda indicadas
+	async createCustomer(dto: CreateCustomerDto): Promise<Customer> {
+		// Verificar que no exista un cliente con la misma cédula en esta empresa
+		const existing = await this.customerRepository.findOne({
+			where: {
+				nationalId: dto.nationalId.trim(),
+				companyId: Number(dto.companyId),
+				storeId: Number(dto.storeId),
+			},
+		});
+
+		if (existing) {
+			throw new ConflictException(
+				`Ya existe un cliente con la cédula ${dto.nationalId} en esta tienda.`,
+			);
+		}
+
+		const customer = this.customerRepository.create({
+			nationalId: dto.nationalId.trim(),
+			companyId: Number(dto.companyId),
+			storeId: Number(dto.storeId),
+			firstName: dto.firstName?.trim(),
+			lastName: dto.lastName?.trim(),
+			phone: dto.phone?.trim(),
+			email: dto.email?.trim(),
+		});
+
+		return this.customerRepository.save(customer);
 	}
 
 	async createSale(createSaleDto: any, userId: string) {
@@ -152,9 +212,13 @@ export class SalesService {
 
 			// Proceso de bonificación
 			if (createSaleDto.customerId) {
-				// Buscar si ya existe una bonificación para este cliente
+				// Buscar si ya existe una bonificación para este cliente en esta empresa y tienda
 				const existingBonus = await queryRunner.manager.findOne(Bonus, {
-					where: { customer_id: createSaleDto.customerId },
+					where: {
+						customer_id: createSaleDto.customerId,
+						company_id: createSaleDto.companyId,
+						store_id: createSaleDto.storeId,
+					},
 				});
 
 				if (existingBonus) {
@@ -168,6 +232,8 @@ export class SalesService {
 					// Crear una nueva bonificación
 					const newBonus = queryRunner.manager.create(Bonus, {
 						customer_id: createSaleDto.customerId,
+						company_id: createSaleDto.companyId,
+						store_id: createSaleDto.storeId,
 						total_amount: createSaleDto.discount_total || 0,
 					});
 					await queryRunner.manager.save(Bonus, newBonus);

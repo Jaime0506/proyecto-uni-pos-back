@@ -39,8 +39,16 @@ export class BonificationsService {
 					'customer.email',
 				]);
 
+			query.where('bonus.company_id = :companyId', {
+				companyId: dto.companyId,
+			});
+
+			query.andWhere('bonus.store_id = :storeId', {
+				storeId: dto.storeId,
+			});
+
 			if (dto.customerId) {
-				query.where('bonus.customer_id = :customerId', {
+				query.andWhere('bonus.customer_id = :customerId', {
 					customerId: dto.customerId,
 				});
 			}

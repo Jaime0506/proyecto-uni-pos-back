@@ -15,11 +15,11 @@ export class GetReportsDto {
 	@IsInt()
 	companyId!: number;
 
-	@ApiPropertyOptional({ description: 'ID de la sucursal' })
-	@IsOptional()
+	@ApiProperty({ description: 'ID de la sucursal' })
+	@IsNotEmpty()
 	@Type(() => Number)
 	@IsInt()
-	storeId?: number;
+	storeId!: number;
 
 	@ApiPropertyOptional({ description: 'Fecha de inicio (YYYY-MM-DD)' })
 	@IsOptional()

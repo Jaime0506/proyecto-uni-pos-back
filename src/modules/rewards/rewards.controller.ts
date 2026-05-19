@@ -35,9 +35,17 @@ export class RewardsController {
 
 	@Get('get-all')
 	// @RequirePermissions(['rewards:read'])
-	async getRewardRules(@Query('companyId') companyId?: string) {
-		const companyIdNumber = companyId ? parseInt(companyId, 10) : undefined;
-		return await this.rewardsService.getRewardRules(companyIdNumber);
+	async getRewardRules(
+		@Query('companyId') companyId: string,
+		@Query('storeId') storeId: string,
+	) {
+		const companyIdNumber = parseInt(companyId, 10);
+		const storeIdNumber = parseInt(storeId, 10);
+
+		return await this.rewardsService.getRewardRules(
+			companyIdNumber,
+			storeIdNumber,
+		);
 	}
 
 	// @Get(':id')

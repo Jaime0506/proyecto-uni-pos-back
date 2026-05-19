@@ -82,9 +82,8 @@ export class ReportsService {
 			)
 			.where('sale.company_id = :companyId', { companyId });
 
-		if (storeId) {
-			query.andWhere('sale.store_id = :storeId', { storeId });
-		}
+		query.andWhere('sale.store_id = :storeId', { storeId });
+
 		if (startDate) {
 			query.andWhere('sale.created_at >= :startDate', {
 				startDate: new Date(startDate),
