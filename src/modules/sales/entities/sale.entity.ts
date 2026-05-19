@@ -19,6 +19,9 @@ export class Sale {
 	@Column({ type: 'int' })
 	store_id: number;
 
+	@Column({ type: 'boolean', default: false })
+	claim_bonus: boolean;
+
 	@Column({ type: 'uuid', nullable: true })
 	user_id?: string;
 

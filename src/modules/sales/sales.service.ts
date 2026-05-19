@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import {
+	BadRequestException,
+	ConflictException,
+	Injectable,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { GetAllSalesDto } from './dto/get-all-sales-dto';
@@ -168,16 +172,24 @@ export class SalesService {
 	}
 
 	async createSale(createSaleDto: any, userId: string) {
+		console.log('createSaleDto:', createSaleDto);
 		return processTransaction(this.dataSource, async (queryRunner) => {
+			const claimBonus = createSaleDto.claimBonus || false;
+			const subtotal = createSaleDto.total;
+			const discount = createSaleDto.discount_total || 0;
+			const bonusUsed = claimBonus ? discount : 0;
+			const totalFinal = subtotal - bonusUsed;
+
 			const sale = queryRunner.manager.create(Sale, {
 				company_id: createSaleDto.companyId,
 				store_id: createSaleDto.storeId,
 				user_id: userId,
 				customer_id: createSaleDto.customerId,
 				campaign_id: createSaleDto.campaignId ?? null,
-				total: createSaleDto.total,
-				discount_total: createSaleDto.discount_total || 0,
-				subtotal: createSaleDto.total - (createSaleDto.discount_total || 0),
+				subtotal: subtotal,
+				discount_total: discount,
+				total: totalFinal,
+				claim_bonus: claimBonus,
 				status: 'pending',
 				channel: 'in_store',
 			});
@@ -221,11 +233,15 @@ export class SalesService {
 					},
 				});
 
+				const previousAmount = existingBonus
+					? Number(existingBonus.total_amount)
+					: 0;
+				const amount = claimBonus ? -discount : discount;
+				const newAmount = previousAmount + amount;
+
 				if (existingBonus) {
 					// Actualizar la bonificación existente sumando el nuevo monto
-					existingBonus.total_amount =
-						Number(existingBonus.total_amount) +
-						(createSaleDto.discount_total || 0);
+					existingBonus.total_amount = newAmount;
 					existingBonus.updated_at = new Date();
 					await queryRunner.manager.save(Bonus, existingBonus);
 				} else {
@@ -234,10 +250,25 @@ export class SalesService {
 						customer_id: createSaleDto.customerId,
 						company_id: createSaleDto.companyId,
 						store_id: createSaleDto.storeId,
-						total_amount: createSaleDto.discount_total || 0,
+						total_amount: newAmount,
 					});
 					await queryRunner.manager.save(Bonus, newBonus);
 				}
+
+				// Registrar la transacción de bonificación
+				const bonusTransaction = queryRunner.manager.create(
+					'bonus_transactions',
+					{
+						customer_id: createSaleDto.customerId,
+						sale_id: savedSale.id,
+						company_id: createSaleDto.companyId,
+						store_id: createSaleDto.storeId,
+						amount,
+						previous_amount: previousAmount,
+						new_amount: newAmount,
+					},
+				);
+				await queryRunner.manager.save('bonus_transactions', bonusTransaction);
 			}
 
 			return {
