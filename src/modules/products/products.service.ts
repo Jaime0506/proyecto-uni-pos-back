@@ -7,6 +7,7 @@ import csvParser from 'csv-parser';
 import { Readable } from 'stream';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Category } from 'src/modules/categories/entities/category.entity';
+import { CreateProductDto } from './dto/create-product.dto';
 
 @Injectable()
 export class ProductsService {
@@ -204,6 +205,18 @@ export class ProductsService {
 		return {
 			message: 'Producto actualizado correctamente',
 			product: updated,
+		};
+	}
+
+	async createProduct(dto: CreateProductDto) {
+		const newProduct = this.productRepository.create({
+			...dto,
+			company: { id: Number(dto.companyId) },
+		});
+		const savedProduct = await this.productRepository.save(newProduct);
+		return {
+			message: 'Producto creado correctamente',
+			product: savedProduct,
 		};
 	}
 

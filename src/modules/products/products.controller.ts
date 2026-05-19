@@ -15,6 +15,7 @@ import { PermissionGuard } from '../auth/authorization-guard';
 import { GetAllProductsDto } from './dto/get-all-products.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { CreateProductDto } from './dto/create-product.dto';
 
 @Controller('products')
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -39,6 +40,11 @@ export class ProductsController {
 	@Patch('update')
 	async updateProduct(@Body() dto: UpdateProductDto) {
 		return this.productsService.updateProduct(dto);
+	}
+
+	@Post('create')
+	async createProduct(@Body() dto: CreateProductDto) {
+		return this.productsService.createProduct(dto);
 	}
 
 	@Delete('delete/:id')

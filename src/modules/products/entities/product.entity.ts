@@ -31,10 +31,10 @@ export class Product {
 	name!: string;
 
 	@Column({ type: 'varchar', length: 80, nullable: true })
-	sku!: string;
+	sku?: string;
 
 	@Column({ type: 'varchar', length: 80, nullable: true })
-	barcode!: string;
+	barcode?: string;
 
 	@Column({ type: 'numeric', precision: 18, scale: 4, name: 'purchase_price' })
 	purchasePrice!: number;
