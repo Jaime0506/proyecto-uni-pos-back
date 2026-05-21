@@ -17,6 +17,7 @@ import { BonificationsModule } from './modules/bonifications/bonifications.modul
 import { CacheModule } from './modules/cache/cache.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { CategoriesModule } from './modules/categories/categories.module';
+import { CustomerPortalModule } from './modules/customer-portal/customer-portal.module';
 
 @Module({
 	imports: [
@@ -37,6 +38,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
 		CustomersModule,
 		ReportsModule,
 		CategoriesModule,
+		CustomerPortalModule,
 	],
 })
 export class AppModule {}
