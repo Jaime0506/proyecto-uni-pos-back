@@ -6,11 +6,12 @@ import { Sale } from '../sales/entities/sale.entity';
 import { SaleItem } from '../sales/entities/sale-items.entity';
 import { Product } from '../products/entities/product.entity';
 import { Customer } from '../customers/entities/customer.entity';
+import { User } from 'src/core/users/user.entity';
 import { AuthorizationGuardModule } from '../auth/authorization-guard/authorization-guard.module';
 
 @Module({
 	imports: [
-		TypeOrmModule.forFeature([Sale, SaleItem, Product, Customer]),
+		TypeOrmModule.forFeature([Sale, SaleItem, Product, Customer, User]),
 		AuthorizationGuardModule,
 	],
 	controllers: [ReportsController],

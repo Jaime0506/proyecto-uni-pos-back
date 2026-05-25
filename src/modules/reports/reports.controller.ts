@@ -5,6 +5,7 @@ import {
 	Res,
 	UseGuards,
 	ParseIntPipe,
+	DefaultValuePipe,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
@@ -44,7 +45,8 @@ export class ReportsController {
 	@ApiOperation({ summary: 'Reporte de inventario y alertas (Paginado)' })
 	async getInventoryReport(
 		@Query() getReportsDto: GetReportsDto,
-		@Query('lowStockThreshold', ParseIntPipe) lowStockThreshold: number = 5,
+		@Query('lowStockThreshold', new DefaultValuePipe(5), ParseIntPipe)
+		lowStockThreshold: number,
 	) {
 		return await this.reportsService.getInventoryReport(
 			getReportsDto,
@@ -56,7 +58,8 @@ export class ReportsController {
 	@ApiOperation({ summary: 'Exportar reporte de inventario a CSV' })
 	async exportInventoryReport(
 		@Query() getReportsDto: GetReportsDto,
-		@Query('lowStockThreshold', ParseIntPipe) lowStockThreshold: number = 5,
+		@Query('lowStockThreshold', new DefaultValuePipe(5), ParseIntPipe)
+		lowStockThreshold: number,
 		@Res() res: Response,
 	) {
 		const csvData = await this.reportsService.exportInventoryReport(

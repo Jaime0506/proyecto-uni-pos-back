@@ -5,6 +5,7 @@ import { Sale } from '../sales/entities/sale.entity';
 import { SaleItem } from '../sales/entities/sale-items.entity';
 import { Product } from '../products/entities/product.entity';
 import { Customer } from '../customers/entities/customer.entity';
+import { User } from 'src/core/users/user.entity';
 import { GetReportsDto } from './dto/get-reports.dto';
 
 @Injectable()
@@ -18,6 +19,8 @@ export class ReportsService {
 		private readonly productRepository: Repository<Product>,
 		@InjectRepository(Customer)
 		private readonly customerRepository: Repository<Customer>,
+		@InjectRepository(User)
+		private readonly userRepository: Repository<User>,
 	) {}
 
 	// Utilidad generadora de CSV
@@ -202,12 +205,13 @@ export class ReportsService {
 	// 2. INVENTARIO
 	// -------------------------------------------------------------
 	async getInventoryReport(dto: GetReportsDto, lowStockThreshold: number) {
-		const { companyId, page = 1, limit = 10 } = dto;
+		const { companyId, storeId, page = 1, limit = 10 } = dto;
 
 		const query = this.productRepository
 			.createQueryBuilder('product')
 			.leftJoinAndSelect('product.category', 'category')
-			.where('product.company_id = :companyId', { companyId });
+			.where('product.company_id = :companyId', { companyId })
+			.andWhere('product.store_id = :storeId', { storeId });
 
 		query.orderBy('product.stock', 'ASC');
 
@@ -217,7 +221,11 @@ export class ReportsService {
 		const [data, total] = await query.getManyAndCount();
 
 		const result = data.map((p) => ({
-			...p,
+			productId: p.id,
+			productName: p.name,
+			sku: p.sku || 'N/A',
+			category: p.category ? p.category.name : 'N/A',
+			stock: p.stock,
 			isLowStock: p.stock <= lowStockThreshold,
 		}));
 
@@ -240,12 +248,13 @@ export class ReportsService {
 		dto: GetReportsDto,
 		lowStockThreshold: number,
 	): Promise<string> {
-		const { companyId } = dto;
+		const { companyId, storeId } = dto;
 
 		const query = this.productRepository
 			.createQueryBuilder('product')
 			.leftJoinAndSelect('product.category', 'category')
-			.where('product.company_id = :companyId', { companyId });
+			.where('product.company_id = :companyId', { companyId })
+			.andWhere('product.store_id = :storeId', { storeId });
 
 		query.orderBy('product.stock', 'ASC');
 
@@ -296,16 +305,17 @@ export class ReportsService {
 		const query = this.saleRepository
 			.createQueryBuilder('sale')
 			.select('DATE(sale.created_at)', 'date')
-			.addSelect('sale.store_id', 'store_id')
 			.addSelect('sale.user_id', 'user_id')
+			.addSelect('u.first_name', 'user_first_name')
+			.addSelect('u.last_name', 'user_last_name')
+			.addSelect('u.username', 'user_username')
 			.addSelect('COUNT(sale.id)', 'total_sales_count')
 			.addSelect('SUM(sale.total)', 'total_amount')
 			.addSelect('SUM(sale.discount_total)', 'total_discount')
-			.where('sale.company_id = :companyId', { companyId });
+			.leftJoin(User, 'u', 'u.id = sale.user_id')
+			.where('sale.company_id = :companyId', { companyId })
+			.andWhere('sale.store_id = :storeId', { storeId });
 
-		if (storeId) {
-			query.andWhere('sale.store_id = :storeId', { storeId });
-		}
 		if (startDate) {
 			query.andWhere('sale.created_at >= :startDate', {
 				startDate: new Date(startDate),
@@ -319,12 +329,14 @@ export class ReportsService {
 
 		query
 			.groupBy('DATE(sale.created_at)')
-			.addGroupBy('sale.store_id')
-			.addGroupBy('sale.user_id');
+			.addGroupBy('sale.user_id')
+			.addGroupBy('u.first_name')
+			.addGroupBy('u.last_name')
+			.addGroupBy('u.username');
 
 		query.orderBy('date', 'DESC');
 
-		// Obtener total de grupos para la paginación (usando subquery o contando keys)
+		// Obtener total de grupos para la paginación
 		const countQuery = query.clone();
 		const rawCount = await countQuery.getRawMany();
 		const total = rawCount.length;
@@ -334,12 +346,14 @@ export class ReportsService {
 
 		const data = await query.getRawMany();
 
-		// Convertir strings numericos a numeros, parsear fechas
+		// Convertir strings numéricos a números, construir nombre del vendedor
 		const formattedData = data.map((row) => ({
 			fecha: row.date,
 			fechaString: new Date(row.date).toISOString().split('T')[0],
-			storeId: row.store_id,
-			userId: row.user_id || 'Desconocido',
+			userName:
+				row.user_first_name && row.user_last_name
+					? `${row.user_first_name} ${row.user_last_name}`.trim()
+					: (row.user_username || 'Desconocido'),
 			cantidadVentas: Number(row.total_sales_count),
 			ingresoTotal: Number(row.total_amount || 0),
 			descuentosTotal: Number(row.total_discount || 0),
@@ -370,8 +384,7 @@ export class ReportsService {
 
 		const formattedData = data.map((item) => ({
 			Fecha: item.fechaString,
-			Sucursal: item.storeId,
-			Usuario_ID: item.userId,
+			Vendedor: item.userName,
 			Ventas_Totales: item.cantidadVentas,
 			Descuentos_Acumulados: item.descuentosTotal,
 			Ingreso_Total: item.ingresoTotal,
@@ -379,8 +392,7 @@ export class ReportsService {
 
 		const headers = [
 			'Fecha',
-			'Sucursal',
-			'Usuario_ID',
+			'Vendedor',
 			'Ventas_Totales',
 			'Descuentos_Acumulados',
 			'Ingreso_Total',
@@ -404,6 +416,7 @@ export class ReportsService {
 
 		const query = this.saleItemRepository
 			.createQueryBuilder('si')
+			.withDeleted()
 			.innerJoin(Sale, 's', 's.id = si.sale_id')
 			.innerJoin(Product, 'p', 'p.id = si.product_id')
 			.select('p.id', 'product_id')
@@ -411,7 +424,8 @@ export class ReportsService {
 			.addSelect('p.sku', 'product_sku')
 			.addSelect('SUM(si.quantity)', 'total_quantity_sold')
 			.addSelect('SUM(si.line_total)', 'total_revenue')
-			.where('s.company_id = :companyId', { companyId });
+			.where('s.company_id = :companyId', { companyId })
+			.andWhere('s.deleted_at IS NULL');
 
 		if (storeId) {
 			query.andWhere('s.store_id = :storeId', { storeId });
@@ -431,9 +445,11 @@ export class ReportsService {
 
 		query.orderBy('total_quantity_sold', 'DESC');
 
-		const countQuery = query.clone();
-		const rawCount = await countQuery.getRawMany();
-		const total = rawCount.length;
+		const total = await query
+			.clone()
+			.select('COUNT(DISTINCT p.id)', 'count')
+			.getRawOne()
+			.then((res) => Number(res?.count || 0));
 
 		const offset = (page - 1) * limit;
 		query.offset(offset).limit(limit);

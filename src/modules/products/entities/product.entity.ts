@@ -10,7 +10,7 @@ import {
 	JoinColumn,
 } from 'typeorm';
 import { Company } from 'src/modules/companies/entities/company.entity';
-import { ProductCategory } from './product-category.entity';
+import { Category } from 'src/modules/categories/entities/category.entity';
 
 @Entity({ name: 'products', schema: 'sys' })
 @Index('products_company_name_idx', ['company', 'name'])
@@ -23,9 +23,9 @@ export class Product {
 	@JoinColumn({ name: 'company_id' })
 	company!: Company;
 
-	@ManyToOne(() => ProductCategory, { nullable: true })
+	@ManyToOne(() => Category, { nullable: true })
 	@JoinColumn({ name: 'category_id' })
-	category!: ProductCategory;
+	category!: Category;
 
 	@Column({ type: 'varchar', length: 255 })
 	name!: string;
