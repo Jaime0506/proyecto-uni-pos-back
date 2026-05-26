@@ -425,11 +425,9 @@ export class ReportsService {
 			.addSelect('SUM(si.quantity)', 'total_quantity_sold')
 			.addSelect('SUM(si.line_total)', 'total_revenue')
 			.where('s.company_id = :companyId', { companyId })
+			.andWhere('s.store_id = :storeId', { storeId })
 			.andWhere('s.deleted_at IS NULL');
 
-		if (storeId) {
-			query.andWhere('s.store_id = :storeId', { storeId });
-		}
 		if (startDate) {
 			query.andWhere('s.created_at >= :startDate', {
 				startDate: new Date(startDate),
@@ -445,11 +443,10 @@ export class ReportsService {
 
 		query.orderBy('total_quantity_sold', 'DESC');
 
-		const total = await query
-			.clone()
-			.select('COUNT(DISTINCT p.id)', 'count')
-			.getRawOne()
-			.then((res) => Number(res?.count || 0));
+		// Obtener total de grupos para la paginación
+		const countQuery = query.clone();
+		const rawCount = await countQuery.getRawMany();
+		const total = rawCount.length;
 
 		const offset = (page - 1) * limit;
 		query.offset(offset).limit(limit);
