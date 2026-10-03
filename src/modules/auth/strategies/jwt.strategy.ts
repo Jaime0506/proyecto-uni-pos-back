@@ -49,7 +49,36 @@ export class JwtStrategy extends PassportStrategy(JwtStrategyBase) {
 			throw new UnauthorizedException('Sesión inválida o expirada');
 		}
 
-		// Fire-and-forget: no bloquear el flujo por este update
+		// Protección: Verificar si el usuario fue desactivado o revocado por el administrador
+		if (!session.user || !session.user.isActive) {
+			await this.sessions.update(
+				{ id: session.id },
+				{ revokedAt: new Date(), revokedReason: 'user_deactivated' },
+			);
+			throw new UnauthorizedException(
+				'Usuario inactivo o revocado por administración',
+			);
+		}
+
+		// Requerimiento B3: Cierre automático por inactividad (Idle Timeout)
+		const idleTimeoutMinutes = Number(
+			this.configService.get('SESSION_IDLE_TIMEOUT_MINUTES') || 15,
+		);
+		const lastActivity = session.lastSeenAt || session.loginAt;
+		if (lastActivity) {
+			const elapsedMinutes =
+				(Date.now() - new Date(lastActivity).getTime()) / (1000 * 60);
+
+			if (elapsedMinutes > idleTimeoutMinutes) {
+				await this.sessions.update(
+					{ id: session.id },
+					{ revokedAt: new Date(), revokedReason: 'inactivity_timeout' },
+				);
+				throw new UnauthorizedException('Sesión cerrada por inactividad');
+			}
+		}
+
+		// Actualizar última actividad del usuario
 		void this.sessions.update({ id: session.id }, { lastSeenAt: new Date() });
 
 		return {

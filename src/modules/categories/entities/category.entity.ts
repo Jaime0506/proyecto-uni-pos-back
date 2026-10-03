@@ -13,7 +13,7 @@ import {
 import { Company } from 'src/modules/companies/entities/company.entity';
 
 @Entity({ name: 'product_categories', schema: 'sys' })
-@Unique(['companyId', 'name'])
+@Unique('product_categories_company_name_uk', ['companyId', 'name'])
 export class Category {
 	@PrimaryGeneratedColumn()
 	id!: number;
@@ -24,6 +24,9 @@ export class Category {
 	@ManyToOne(() => Company)
 	@JoinColumn({ name: 'company_id' })
 	company!: Company;
+
+	@Column({ name: 'store_id', type: 'int', nullable: true })
+	storeId?: number | null;
 
 	@Column({ type: 'varchar', length: 120 })
 	name!: string;

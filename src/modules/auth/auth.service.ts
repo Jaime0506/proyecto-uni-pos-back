@@ -91,7 +91,7 @@ export class AuthService {
 					username: user.username,
 					isSuperRoot: user.isSuperRoot,
 				},
-				{ expiresIn: this.cfg.get('JWT_ACCESS_TTL') || '15m' },
+				{ expiresIn: (this.cfg.get('JWT_ACCESS_TTL') || '15m') as any },
 			);
 
 			// refresh con mismo jti pero TTL largo
@@ -103,7 +103,7 @@ export class AuthService {
 					isSuperRoot: user.isSuperRoot,
 					typ: 'refresh',
 				},
-				{ expiresIn: refreshTtl },
+				{ expiresIn: refreshTtl as any },
 			);
 
 			return {
@@ -215,6 +215,26 @@ export class AuthService {
 			throw new UnauthorizedException('Sesión inválida o expirada');
 		}
 
+		// Requerimiento B3: Validar inactividad también en refresh
+		const idleTimeoutMinutes = Number(
+			this.cfg.get('SESSION_IDLE_TIMEOUT_MINUTES') || 15,
+		);
+		const lastActivity = session.lastSeenAt || session.loginAt;
+		if (lastActivity) {
+			const elapsedMinutes =
+				(Date.now() - new Date(lastActivity).getTime()) / (1000 * 60);
+			if (elapsedMinutes > idleTimeoutMinutes) {
+				await this.sessions.update(
+					{ id: session.id },
+					{ revokedAt: new Date(), revokedReason: 'inactivity_timeout' },
+				);
+				throw new UnauthorizedException('Sesión cerrada por inactividad');
+			}
+		}
+
+		// Actualizar última actividad
+		void this.sessions.update({ id: session.id }, { lastSeenAt: new Date() });
+
 		const accessToken = this.jwt.sign(
 			{
 				sub: session.user.id,
@@ -222,10 +242,18 @@ export class AuthService {
 				username: session.user.username,
 				isSuperRoot: session.user.isSuperRoot,
 			},
-			{ expiresIn: this.cfg.get('JWT_ACCESS_TTL') || '15m' },
+			{ expiresIn: (this.cfg.get('JWT_ACCESS_TTL') || '30m') as any },
 		);
 
 		return { accessToken };
+	}
+
+	// Mecanismo de protección: Revocar inmediatamente todas las sesiones de un usuario no autorizado
+	async revokeAllUserSessions(userId: string, reason = 'admin_revocation') {
+		return await this.sessions.update(
+			{ user: { id: userId }, revokedAt: IsNull() },
+			{ revokedAt: new Date(), revokedReason: reason, logoutAt: new Date() },
+		);
 	}
 
 	async logout(req: Request & { user: RequestUser }, reason = 'logout') {

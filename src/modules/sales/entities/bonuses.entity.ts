@@ -14,11 +14,11 @@ export class Bonus {
 	@Column({ type: 'int', unique: true })
 	customer_id!: number;
 
-	@Column({ type: 'numeric' })
-	company_id!: number;
+	@Column({ type: 'int', nullable: true })
+	company_id?: number | null;
 
-	@Column({ type: 'numeric' })
-	store_id!: number;
+	@Column({ type: 'int', nullable: true })
+	store_id?: number | null;
 
 	@Column({ type: 'numeric', precision: 18, scale: 2, default: 0 })
 	total_amount!: number;

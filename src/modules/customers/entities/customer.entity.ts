@@ -1,5 +1,6 @@
 import { StatusEnum } from 'src/core/status.enum';
 import { Company } from 'src/modules/companies/entities/company.entity';
+import { Store } from 'src/modules/stores/entities/store.entity';
 import {
 	Entity,
 	PrimaryGeneratedColumn,
@@ -14,16 +15,26 @@ import {
 } from 'typeorm';
 
 @Entity({ name: 'customers', schema: 'sys' })
-@Unique(['company', 'nationalId'])
+@Unique('customers_company_national_uk', ['companyId', 'nationalId'])
 @Index('customers_company_phone_idx', ['company', 'phone'])
 @Index('customers_company_email_idx', ['company', 'email'])
 export class Customer {
 	@PrimaryGeneratedColumn('increment', { name: 'id' })
 	id: number;
 
+	@Column({ name: 'company_id', type: 'int' })
+	companyId: number;
+
 	@ManyToOne(() => Company, { nullable: false })
 	@JoinColumn({ name: 'company_id' })
 	company: Company;
+
+	@Column({ name: 'store_id', type: 'int', nullable: true })
+	storeId?: number | null;
+
+	@ManyToOne(() => Store, { nullable: true })
+	@JoinColumn({ name: 'store_id' })
+	store?: Store | null;
 
 	@Column({ type: 'varchar', length: 20, name: 'national_id', nullable: false })
 	nationalId: string;
@@ -39,6 +50,15 @@ export class Customer {
 
 	@Column({ type: 'varchar', length: 255, name: 'email', nullable: true })
 	email?: string;
+
+	@Column({
+		type: 'varchar',
+		length: 255,
+		name: 'password',
+		nullable: true,
+		select: false,
+	})
+	password?: string | null;
 
 	@CreateDateColumn({
 		type: 'timestamptz',
@@ -60,6 +80,7 @@ export class Customer {
 	@Column({
 		type: 'enum',
 		enum: StatusEnum,
+		enumName: 'status_enum',
 		default: StatusEnum.ACTIVE,
 		name: 'status',
 	})

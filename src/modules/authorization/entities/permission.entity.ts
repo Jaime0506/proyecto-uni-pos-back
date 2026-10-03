@@ -24,6 +24,7 @@ export class Permission {
 	@Column({
 		type: 'enum',
 		enum: StatusEnum,
+		enumName: 'status_enum',
 		name: 'status',
 		default: StatusEnum.ACTIVE,
 	})

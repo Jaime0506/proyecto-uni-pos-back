@@ -66,7 +66,8 @@ export class RewardRuleProduct {
 	@UpdateDateColumn({
 		type: 'timestamptz',
 		name: 'updated_at',
+		nullable: true,
 		default: () => 'now()',
 	})
-	updatedAt: Date;
+	updatedAt?: Date | null;
 }

@@ -4,6 +4,8 @@ import {
 	Delete,
 	Get,
 	HttpCode,
+	Param,
+	ParseIntPipe,
 	Patch,
 	Post,
 	UseGuards,
@@ -59,5 +61,14 @@ export class CustomersController {
 	@HttpCode(200)
 	async deleteCustomer(@Body() dto: DeleteCustomerDto) {
 		return await this.customersService.deleteCustomer(dto);
+	}
+
+	// Requerimiento B1: Restablecer contraseña del cliente desde la tienda
+	@Patch('reset-password/:id')
+	@UseGuards(PermissionGuard)
+	@RequirePermissions(['customer:update'])
+	@HttpCode(200)
+	async resetPassword(@Param('id', ParseIntPipe) id: number) {
+		return await this.customersService.resetPassword(id);
 	}
 }

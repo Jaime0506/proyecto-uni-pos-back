@@ -8,12 +8,13 @@ import {
 	ManyToOne,
 	JoinColumn,
 	Index,
+	Unique,
 } from 'typeorm';
 import { Company } from 'src/modules/companies/entities/company.entity';
 import { StatusEnum } from '../../../core/status.enum';
 
 @Entity({ schema: 'sys', name: 'roles' })
-@Index('roles_company_name_uk', ['company', 'name'], { unique: true })
+@Unique('roles_company_name_uk', ['companyId', 'name'])
 export class Role {
 	@PrimaryGeneratedColumn('increment', { name: 'id' })
 	id!: number;
@@ -34,6 +35,7 @@ export class Role {
 	@Column({
 		type: 'enum',
 		enum: StatusEnum,
+		enumName: 'status_enum',
 		name: 'status',
 		default: StatusEnum.ACTIVE,
 	})

@@ -3,6 +3,7 @@ import {
 	BadRequestException,
 	InternalServerErrorException,
 	ConflictException,
+	NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -219,6 +220,37 @@ export class CustomersService {
 				throw error;
 			}
 			throw new InternalServerErrorException('Error al eliminar el cliente');
+		}
+	}
+
+	// Requerimiento B1: Restablecer contraseña del cliente desde la tienda
+	async resetPassword(id: number) {
+		try {
+			const customer = await this.customerRepository.findOne({
+				where: { id },
+				withDeleted: false,
+			});
+
+			if (!customer) {
+				throw new NotFoundException(`El cliente con ID ${id} no existe`);
+			}
+
+			customer.password = null;
+			await this.customerRepository.save(customer);
+
+			return {
+				ok: true,
+				message:
+					'Contraseña restablecida exitosamente. El cliente podrá crear una nueva clave en su próximo ingreso al portal.',
+			};
+		} catch (error) {
+			console.error(error);
+			if (error instanceof NotFoundException) {
+				throw error;
+			}
+			throw new InternalServerErrorException(
+				'Error al restablecer la contraseña del cliente',
+			);
 		}
 	}
 }

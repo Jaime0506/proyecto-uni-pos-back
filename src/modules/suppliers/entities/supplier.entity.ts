@@ -52,6 +52,7 @@ export class Supplier {
 	@Column({
 		type: 'enum',
 		enum: StatusEnum,
+		enumName: 'status_enum',
 		default: StatusEnum.ACTIVE,
 		name: 'status',
 	})

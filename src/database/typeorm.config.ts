@@ -17,6 +17,6 @@ export const typeOrmConfig: TypeOrmModuleAsyncOptions = {
 		schema: config.get<string>('NEON_SCHEMA') ?? 'sys', // esquema por defecto
 		ssl: true,
 		entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-		synchronize: false, // usamos migraciones
+		synchronize: true, // usamos migraciones
 	}),
 };

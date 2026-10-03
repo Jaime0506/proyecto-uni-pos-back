@@ -1,13 +1,17 @@
 import {
 	BadRequestException,
+	Body,
 	Controller,
 	Get,
 	HttpCode,
 	ParseIntPipe,
+	Post,
 	Query,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CustomerPortalService } from './customer-portal.service';
+import { SetCustomerPasswordDto } from './dto/set-customer-password.dto';
+import { VerifyCustomerPasswordDto } from './dto/verify-customer-password.dto';
 
 @ApiTags('Customer Portal (Public)')
 @Controller('customer-portal')
@@ -94,4 +98,74 @@ export class CustomerPortalController {
 			data: { result: transactions },
 		};
 	}
+
+	// Obtener historial completo de compras del cliente con detalle de productos
+	@Get('purchases')
+	@HttpCode(200)
+	@ApiOperation({
+		summary:
+			'Obtener historial de compras del cliente con detalle de productos (endpoint público)',
+	})
+	@ApiQuery({ name: 'customerId', type: Number, required: true })
+	@ApiQuery({ name: 'companyId', type: Number, required: true })
+	@ApiQuery({ name: 'storeId', type: Number, required: true })
+	async getPurchases(
+		@Query('customerId', ParseIntPipe) customerId: number,
+		@Query('companyId', ParseIntPipe) companyId: number,
+		@Query('storeId', ParseIntPipe) storeId: number,
+	) {
+		const purchases = await this.customerPortalService.getPurchases(
+			customerId,
+			companyId,
+			storeId,
+		);
+
+		return {
+			ok: true,
+			message: 'Historial de compras obtenido correctamente',
+			data: { result: purchases },
+		};
+	}
+
+	// Requerimiento B1: Establecer contraseña por primera vez o tras restablecimiento
+	@Post('set-password')
+	@HttpCode(200)
+	@ApiOperation({
+		summary: 'Definir contraseña de acceso del cliente (endpoint público)',
+	})
+	async setPassword(@Body() dto: SetCustomerPasswordDto) {
+		const result = await this.customerPortalService.setPassword(
+			dto.customerId,
+			dto.companyId,
+			dto.storeId,
+			dto.password,
+		);
+
+		return {
+			ok: true,
+			message: result.message,
+		};
+	}
+
+	// Requerimiento B1: Verificar contraseña de cliente recurrente
+	@Post('verify-password')
+	@HttpCode(200)
+	@ApiOperation({
+		summary: 'Verificar contraseña de acceso del cliente (endpoint público)',
+	})
+	async verifyPassword(@Body() dto: VerifyCustomerPasswordDto) {
+		const result = await this.customerPortalService.verifyPassword(
+			dto.customerId,
+			dto.companyId,
+			dto.storeId,
+			dto.password,
+		);
+
+		return {
+			ok: true,
+			message: result.message,
+			data: { verified: result.verified },
+		};
+	}
 }
+

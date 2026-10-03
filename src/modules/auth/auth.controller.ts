@@ -16,6 +16,7 @@ import { RefreshDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RegisterDto } from './dto/register.dto';
 import { AvailabilityDto } from './dto/availability.dto';
+import { LogoutDto } from './dto/logout.dto';
 import { RequestUser } from 'src/types/global';
 
 @Controller('auth')
@@ -51,8 +52,11 @@ export class AuthController {
 	@UseGuards(JwtAuthGuard)
 	@Post('logout')
 	@HttpCode(200)
-	async logout(@Req() req: Request & { user: RequestUser }) {
-		return this.auth.logout(req, 'logout');
+	async logout(
+		@Req() req: Request & { user: RequestUser },
+		@Body() dto?: LogoutDto,
+	) {
+		return this.auth.logout(req, dto?.reason || 'logout');
 	}
 
 	@UseGuards(JwtAuthGuard)

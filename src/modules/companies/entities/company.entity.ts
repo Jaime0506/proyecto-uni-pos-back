@@ -43,9 +43,13 @@ export class Company {
 	@Column({ type: 'int', default: 1, name: 'max_stores' })
 	maxStores: number;
 
+	@Column({ type: 'boolean', name: 'is_active', default: true, nullable: true })
+	isActive?: boolean;
+
 	@Column({
 		type: 'enum',
 		enum: StatusEnum,
+		enumName: 'status_enum',
 		default: StatusEnum.ACTIVE,
 		name: 'status',
 	})

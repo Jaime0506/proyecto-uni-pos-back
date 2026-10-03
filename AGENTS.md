@@ -2,6 +2,11 @@
 
 This file provides guidelines for agentic coding assistants working in this NestJS backend repository.
 
+> [!IMPORTANT]
+> **REGLA MANDATORIA DE ENTREGA DE REPORTES Y PLANES:**
+> Cada vez que el usuario solicite un análisis, detalles, plan de implementación, arquitectura o comparativa, **NUNCA** se debe volcar el contenido extenso como texto en el chat. **SIEMPRE** se debe generar y guardar en un archivo Markdown (`.md`) dentro de `docs/` en el repositorio para que el usuario pueda visualizarlo y leerlo claramente en el editor.
+
+
 ## Build/Lint/Test Commands
 
 ```bash

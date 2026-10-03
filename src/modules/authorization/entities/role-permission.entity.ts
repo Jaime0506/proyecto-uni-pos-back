@@ -13,7 +13,7 @@ import { Permission } from './permission.entity';
 import { StatusEnum } from '../../../core/status.enum';
 
 @Entity({ schema: 'sys', name: 'role_permissions' })
-@Unique(['roleId', 'permissionId'])
+@Unique('role_permissions_role_id_permission_id_key', ['roleId', 'permissionId'])
 export class RolePermission {
 	@PrimaryGeneratedColumn('increment', { name: 'id' })
 	id!: number;
@@ -35,6 +35,7 @@ export class RolePermission {
 	@Column({
 		type: 'enum',
 		enum: StatusEnum,
+		enumName: 'status_enum',
 		name: 'status',
 		default: StatusEnum.ACTIVE,
 	})
