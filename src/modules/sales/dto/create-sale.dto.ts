@@ -33,12 +33,16 @@ export class CreateSaleItemDto {
 	@IsNumber()
 	line_total!: number;
 
-	@ApiPropertyOptional({ description: 'Tasa porcentual de IVA aplicada (ej: 19 o 0)' })
+	@ApiPropertyOptional({
+		description: 'Tasa porcentual de IVA aplicada (ej: 19 o 0)',
+	})
 	@IsOptional()
 	@IsNumber()
 	vat_rate?: number;
 
-	@ApiPropertyOptional({ description: 'Monto de IVA liquidado para esta línea' })
+	@ApiPropertyOptional({
+		description: 'Monto de IVA liquidado para esta línea',
+	})
 	@IsOptional()
 	@IsNumber()
 	vat_amount?: number;
@@ -55,7 +59,9 @@ export class CreateSaleDto {
 	@IsNumber()
 	storeId!: number;
 
-	@ApiPropertyOptional({ description: 'ID del cliente (opcional para venta anónima)' })
+	@ApiPropertyOptional({
+		description: 'ID del cliente (opcional para venta anónima)',
+	})
 	@IsOptional()
 	@IsNumber()
 	customerId?: number | null;
@@ -89,12 +95,16 @@ export class CreateSaleDto {
 	@IsNumber()
 	total!: number;
 
-	@ApiPropertyOptional({ description: 'Total de descuento o bonificación aplicada' })
+	@ApiPropertyOptional({
+		description: 'Total de descuento o bonificación aplicada',
+	})
 	@IsOptional()
 	@IsNumber()
 	discount_total?: number;
 
-	@ApiPropertyOptional({ description: 'Indica si el cliente reclama su saldo de bonos' })
+	@ApiPropertyOptional({
+		description: 'Indica si el cliente reclama su saldo de bonos',
+	})
 	@IsOptional()
 	@IsBoolean()
 	claimBonus?: boolean;
@@ -108,12 +118,16 @@ export class CreateSaleDto {
 	@IsIn(['cash', 'transfer', 'qr', 'card'])
 	payment_method?: string;
 
-	@ApiPropertyOptional({ description: 'Monto entregado por el cliente en efectivo' })
+	@ApiPropertyOptional({
+		description: 'Monto entregado por el cliente en efectivo',
+	})
 	@IsOptional()
 	@IsNumber()
 	amount_paid?: number;
 
-	@ApiPropertyOptional({ description: 'Cambio o vueltos entregados al cliente' })
+	@ApiPropertyOptional({
+		description: 'Cambio o vueltos entregados al cliente',
+	})
 	@IsOptional()
 	@IsNumber()
 	change_given?: number;

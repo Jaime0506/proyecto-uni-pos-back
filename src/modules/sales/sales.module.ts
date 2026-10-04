@@ -8,6 +8,7 @@ import { Bonus } from './entities/bonuses.entity';
 import { SaleItem } from './entities/sale-items.entity';
 import { Customer } from './entities/customer.entity';
 import { Product } from '../products/entities/product.entity';
+import { StockMovement } from '../products/entities/stock-movement.entity';
 import { RewardRule } from '../rewards/entities/reward-rule.entity';
 
 @Module({
@@ -19,6 +20,7 @@ import { RewardRule } from '../rewards/entities/reward-rule.entity';
 			Customer,
 			Product,
 			RewardRule,
+			StockMovement,
 		]),
 		AuthorizationGuardModule,
 	],

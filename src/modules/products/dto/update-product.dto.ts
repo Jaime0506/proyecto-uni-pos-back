@@ -34,4 +34,22 @@ export class UpdateProductDto {
 	@ApiProperty({ example: 5 })
 	@IsNumber()
 	stock: number;
+
+	@ApiProperty({ example: 5, required: false })
+	@IsOptional()
+	@IsNumber()
+	minStock?: number;
+
+	@ApiProperty({ example: 1, required: false })
+	@IsOptional()
+	@IsNumber()
+	categoryId?: number;
+
+	@ApiProperty({
+		example: 'https://mi-imagen.com/producto.jpg',
+		required: false,
+	})
+	@IsOptional()
+	@IsString()
+	image?: string;
 }

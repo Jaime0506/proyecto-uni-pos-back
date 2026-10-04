@@ -11,6 +11,9 @@ export class SaleItem {
 	@Column({ type: 'int' })
 	product_id!: number;
 
+	@Column({ type: 'varchar', length: 255, nullable: true })
+	product_name?: string;
+
 	@Column({ type: 'int' })
 	quantity!: number;
 

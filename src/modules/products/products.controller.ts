@@ -2,9 +2,11 @@ import {
 	Body,
 	Controller,
 	Delete,
+	Get,
 	Param,
 	Patch,
 	Post,
+	Req,
 	UploadedFile,
 	UseGuards,
 	UseInterceptors,
@@ -16,6 +18,7 @@ import { GetAllProductsDto } from './dto/get-all-products.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { CreateProductDto } from './dto/create-product.dto';
+import { StockEntryDto } from './dto/stock-entry.dto';
 
 @Controller('products')
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -43,8 +46,24 @@ export class ProductsController {
 	}
 
 	@Post('create')
-	async createProduct(@Body() dto: CreateProductDto) {
-		return this.productsService.createProduct(dto);
+	async createProduct(@Body() dto: CreateProductDto, @Req() req: any) {
+		const userId = req.user?.id || req.user?.sub;
+		return this.productsService.createProduct(dto, userId);
+	}
+
+	@Post('stock-entry/:id')
+	async addStockEntry(
+		@Param('id') id: number,
+		@Body() dto: StockEntryDto,
+		@Req() req: any,
+	) {
+		const userId = req.user?.id || req.user?.sub;
+		return this.productsService.addStockEntry(Number(id), dto, userId);
+	}
+
+	@Get(':id/movements')
+	async getProductMovements(@Param('id') id: number) {
+		return this.productsService.getProductMovements(Number(id));
 	}
 
 	@Delete('delete/:id')

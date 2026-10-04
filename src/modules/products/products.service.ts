@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+	BadRequestException,
+	Injectable,
+	NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Product } from './entities/product.entity';
 import { Repository } from 'typeorm';
@@ -8,6 +12,8 @@ import { Readable } from 'stream';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { Category } from 'src/modules/categories/entities/category.entity';
 import { CreateProductDto } from './dto/create-product.dto';
+import { StockMovement } from './entities/stock-movement.entity';
+import { StockEntryDto } from './dto/stock-entry.dto';
 
 @Injectable()
 export class ProductsService {
@@ -16,14 +22,18 @@ export class ProductsService {
 		private readonly productRepository: Repository<Product>,
 		@InjectRepository(Category)
 		private readonly categoryRepository: Repository<Category>,
+		@InjectRepository(StockMovement)
+		private readonly stockMovementRepository: Repository<StockMovement>,
 	) {}
 
 	async getAllProducts(dto: GetAllProductsDto) {
 		const query = this.productRepository
 			.createQueryBuilder('product')
 			.innerJoin('product.company', 'company')
+			.leftJoinAndSelect('product.category', 'category')
 			.where('company.id = :companyId', { companyId: dto.companyId })
-			.andWhere('product.store_id = :storeId', { storeId: dto.storeId });
+			.andWhere('product.store_id = :storeId', { storeId: dto.storeId })
+			.orderBy('product.id', 'DESC');
 
 		return await query.getMany();
 	}
@@ -182,24 +192,64 @@ export class ProductsService {
 		return resultArray;
 	}
 
-	async updateProduct(dto: UpdateProductDto) {
-		// Verificar que venga el id
+	async updateProduct(dto: UpdateProductDto, userId?: string) {
 		if (!dto.id) {
-			throw new Error('El id del producto es obligatorio para actualizar');
+			throw new BadRequestException(
+				'El id del producto es obligatorio para actualizar',
+			);
 		}
 
-		// Buscar el producto existente
 		const existingProduct = await this.productRepository.findOne({
 			where: { id: dto.id },
+			relations: ['company'],
 		});
 
 		if (!existingProduct) {
-			throw new Error(`No se encontró el producto con id ${dto.id}`);
+			throw new NotFoundException(
+				`No se encontró el producto con id ${dto.id}`,
+			);
 		}
 
-		// Actualizar campos (solo los que vienen en dto)
-		Object.assign(existingProduct, dto);
-		// Guardar los cambios
+		const previousStock = existingProduct.stock;
+		const newStockValue =
+			dto.stock !== undefined ? Number(dto.stock) : previousStock;
+
+		// Si el stock cambió por edición directa, registrar movimiento de ajuste en Kardex
+		if (dto.stock !== undefined && newStockValue !== previousStock) {
+			const diff = newStockValue - previousStock;
+			const movement = this.stockMovementRepository.create({
+				productId: existingProduct.id,
+				companyId: existingProduct.company?.id || 1,
+				storeId: existingProduct.storeId,
+				userId: userId || undefined,
+				type: 'ADJUSTMENT',
+				quantity: diff,
+				previousStock: previousStock,
+				newStock: newStockValue,
+				reason: 'Ajuste manual de stock desde edición de producto',
+			});
+			await this.stockMovementRepository.save(movement);
+		}
+
+		// Asignar campos explícitos
+		if (dto.name !== undefined) existingProduct.name = dto.name;
+		if (dto.sku !== undefined) existingProduct.sku = dto.sku;
+		if (dto.barcode !== undefined) existingProduct.barcode = dto.barcode;
+		if (dto.purchasePrice !== undefined)
+			existingProduct.purchasePrice = Number(dto.purchasePrice);
+		if (dto.salePrice !== undefined)
+			existingProduct.salePrice = Number(dto.salePrice);
+		if (dto.taxExempt !== undefined) existingProduct.taxExempt = dto.taxExempt;
+		if (dto.stock !== undefined) existingProduct.stock = newStockValue;
+		if (dto.minStock !== undefined)
+			existingProduct.minStock = Number(dto.minStock);
+		if (dto.image !== undefined) existingProduct.image = dto.image;
+		if (dto.categoryId !== undefined) {
+			existingProduct.category = dto.categoryId
+				? ({ id: Number(dto.categoryId) } as any)
+				: null;
+		}
+
 		const updated = await this.productRepository.save(existingProduct);
 
 		return {
@@ -208,33 +258,114 @@ export class ProductsService {
 		};
 	}
 
-	async createProduct(dto: CreateProductDto) {
+	async createProduct(dto: CreateProductDto, userId?: string) {
 		const newProduct = this.productRepository.create({
 			...dto,
 			company: { id: Number(dto.companyId) },
+			category: dto.categoryId ? { id: Number(dto.categoryId) } : undefined,
+			minStock: dto.minStock !== undefined ? Number(dto.minStock) : 5,
+			image:
+				dto.image?.trim() ||
+				'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&q=80&w=400',
 		});
 		const savedProduct = await this.productRepository.save(newProduct);
+
+		// Registrar movimiento inicial si stock > 0
+		if (savedProduct.stock > 0) {
+			const movement = this.stockMovementRepository.create({
+				productId: savedProduct.id,
+				companyId: Number(dto.companyId),
+				storeId: Number(dto.storeId),
+				userId: userId || undefined,
+				type: 'INITIAL',
+				quantity: savedProduct.stock,
+				previousStock: 0,
+				newStock: savedProduct.stock,
+				reason: 'Stock inicial al registrar producto',
+			});
+			await this.stockMovementRepository.save(movement);
+		}
+
 		return {
 			message: 'Producto creado correctamente',
 			product: savedProduct,
 		};
 	}
 
-	async deleteProduct(id: number) {
-		try {
-			const product = await this.productRepository.findOne({ where: { id } });
+	async addStockEntry(productId: number, dto: StockEntryDto, userId?: string) {
+		const product = await this.productRepository.findOne({
+			where: { id: productId },
+			relations: ['company'],
+		});
 
-			if (!product) {
-				throw new Error(`No se encontró el producto con id ${id}`);
-			}
-
-			// Marca el producto como eliminado (soft delete)
-			await this.productRepository.softDelete(id);
-
-			return { message: `Producto con id ${id} eliminado correctamente.` };
-		} catch (error) {
-			console.error('ERROR AL ELIMINAR PRODUCTO', error);
-			throw new Error('Error al eliminar producto');
+		if (!product) {
+			throw new NotFoundException(
+				`No se encontró el producto con id ${productId}`,
+			);
 		}
+
+		const previousStock = product.stock;
+		const newStock = previousStock + Number(dto.quantity);
+		product.stock = newStock;
+		await this.productRepository.save(product);
+
+		const movement = this.stockMovementRepository.create({
+			productId: product.id,
+			companyId: dto.companyId || product.company?.id || 1,
+			storeId: dto.storeId || product.storeId,
+			userId: userId || undefined,
+			type: 'MANUAL_ENTRY',
+			quantity: Number(dto.quantity),
+			previousStock,
+			newStock,
+			reason: dto.reason?.trim() || 'Ingreso manual de stock',
+		});
+		await this.stockMovementRepository.save(movement);
+
+		return {
+			ok: true,
+			message: `Se ingresaron ${dto.quantity} unidades correctamente. Stock actual: ${newStock}`,
+			product,
+			movement,
+		};
+	}
+
+	async getProductMovements(productId: number) {
+		const product = await this.productRepository.findOne({
+			where: { id: productId },
+			withDeleted: true,
+		});
+
+		if (!product) {
+			throw new NotFoundException(
+				`No se encontró el producto con id ${productId}`,
+			);
+		}
+
+		const movements = await this.stockMovementRepository.find({
+			where: { productId },
+			order: { createdAt: 'DESC' },
+		});
+
+		return {
+			ok: true,
+			product,
+			data: movements,
+		};
+	}
+
+	async deleteProduct(id: number) {
+		const product = await this.productRepository.findOne({ where: { id } });
+
+		if (!product) {
+			throw new NotFoundException(`No se encontró el producto con id ${id}`);
+		}
+
+		// Marca el producto como eliminado (soft delete)
+		await this.productRepository.softDelete(id);
+
+		return {
+			message: `Producto "${product.name}" dado de baja correctamente.`,
+		};
 	}
 }

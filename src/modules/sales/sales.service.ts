@@ -11,6 +11,7 @@ import { Sale } from './entities/sale.entity';
 import { SaleItem } from './entities/sale-items.entity';
 import { Bonus } from './entities/bonuses.entity';
 import { Product } from '../products/entities/product.entity';
+import { StockMovement } from '../products/entities/stock-movement.entity';
 import { RewardRule } from '../rewards/entities/reward-rule.entity';
 import { processTransaction } from 'src/database/transactions';
 import { CreateCustomerDto } from './dto/create-customer.dto';
@@ -103,7 +104,7 @@ export class SalesService {
 				'si.vat_rate AS item_vat_rate',
 				'si.vat_amount AS item_vat_amount',
 				'si.line_total AS item_total',
-				'p.name AS product_name',
+				'COALESCE(si.product_name, p.name) AS product_name',
 			])
 			.orderBy('s.created_at', 'DESC')
 			.getRawMany();
@@ -286,7 +287,9 @@ export class SalesService {
 				});
 
 				if (!productEntity) {
-					throw new BadRequestException(`Producto con ID ${p.id} no encontrado.`);
+					throw new BadRequestException(
+						`Producto con ID ${p.id} no encontrado.`,
+					);
 				}
 
 				if (productEntity.stock < p.quantity) {
@@ -305,19 +308,24 @@ export class SalesService {
 			const saleItemsData = createSaleDto.products.map((p) => {
 				const prod = productEntitiesMap.get(p.id)!;
 				const isExempt = Boolean(prod.taxExempt);
-				const vatRate = p.vat_rate !== undefined ? Number(p.vat_rate) : (isExempt ? 0 : 19);
+				const vatRate =
+					p.vat_rate !== undefined ? Number(p.vat_rate) : isExempt ? 0 : 19;
 				const unitPrice = Number(p.unit_price);
 				const lineSubtotal = unitPrice * p.quantity;
-				const vatAmount = p.vat_amount !== undefined
-					? Number(p.vat_amount)
-					: (vatRate > 0 ? Math.round(lineSubtotal * (vatRate / 100) * 100) / 100 : 0);
-				const lineTotal = Number(p.line_total) || (lineSubtotal + vatAmount);
+				const vatAmount =
+					p.vat_amount !== undefined
+						? Number(p.vat_amount)
+						: vatRate > 0
+							? Math.round(lineSubtotal * (vatRate / 100) * 100) / 100
+							: 0;
+				const lineTotal = Number(p.line_total) || lineSubtotal + vatAmount;
 
 				computedSubtotal += lineSubtotal;
 				computedTaxTotal += vatAmount;
 
 				return {
 					product_id: p.id,
+					product_name: prod.name,
 					quantity: p.quantity,
 					unit_price: unitPrice,
 					discount: 0,
@@ -327,13 +335,20 @@ export class SalesService {
 				};
 			});
 
-			const subtotalFinal = createSaleDto.subtotal !== undefined ? Number(createSaleDto.subtotal) : computedSubtotal;
-			const taxTotalFinal = createSaleDto.tax_total !== undefined ? Number(createSaleDto.tax_total) : computedTaxTotal;
+			const subtotalFinal =
+				createSaleDto.subtotal !== undefined
+					? Number(createSaleDto.subtotal)
+					: computedSubtotal;
+			const taxTotalFinal =
+				createSaleDto.tax_total !== undefined
+					? Number(createSaleDto.tax_total)
+					: computedTaxTotal;
 			const discount = createSaleDto.discount_total || 0;
 			const bonusUsed = claimBonus ? discount : 0;
-			const totalFinal = createSaleDto.total !== undefined
-				? Number(createSaleDto.total)
-				: (subtotalFinal + taxTotalFinal - bonusUsed);
+			const totalFinal =
+				createSaleDto.total !== undefined
+					? Number(createSaleDto.total)
+					: subtotalFinal + taxTotalFinal - bonusUsed;
 
 			// 3. Crear cabecera inmutable de venta
 			const sale = queryRunner.manager.create(Sale, {
@@ -362,11 +377,26 @@ export class SalesService {
 
 			await queryRunner.manager.insert(SaleItem, saleItems);
 
-			// 5. Actualizar stock de productos de forma atómica
+			// 5. Actualizar stock de productos de forma atómica y registrar movimiento en Kardex
 			for (const product of createSaleDto.products) {
 				const productEntity = productEntitiesMap.get(product.id)!;
-				productEntity.stock = productEntity.stock - product.quantity;
+				const previousStock = productEntity.stock;
+				const newStock = previousStock - product.quantity;
+				productEntity.stock = newStock;
 				await queryRunner.manager.save(Product, productEntity);
+
+				const movement = queryRunner.manager.create(StockMovement, {
+					productId: productEntity.id,
+					companyId: Number(createSaleDto.companyId),
+					storeId: Number(createSaleDto.storeId),
+					userId: userId || undefined,
+					type: 'SALE',
+					quantity: -product.quantity,
+					previousStock,
+					newStock,
+					reason: `Venta #${savedSale.id}`,
+				});
+				await queryRunner.manager.save(StockMovement, movement);
 			}
 
 			// Proceso de bonificación
