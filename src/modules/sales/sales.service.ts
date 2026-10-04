@@ -36,16 +36,50 @@ export class SalesService {
 	) {}
 
 	async getAllSales(getSalesDto: GetAllSalesDto) {
-		const { companyId, storeId } = getSalesDto;
+		const { companyId, storeId, startDate, endDate, search } = getSalesDto;
 
-		const result = await this.saleRepository
+		const query = this.saleRepository
 			.createQueryBuilder('s')
 			.leftJoin('sale_items', 'si', 'si.sale_id = s.id')
 			.leftJoin('customers', 'c', 'c.id = s.customer_id')
 			.leftJoin('reward_rules', 'rr', 'rr.id = s.campaign_id')
 			.leftJoin('products', 'p', 'p.id = si.product_id')
 			.where('s.company_id = :companyId', { companyId })
-			.andWhere('s.store_id = :storeId', { storeId })
+			.andWhere('s.store_id = :storeId', { storeId });
+
+		if (startDate) {
+			const start = new Date(startDate);
+			start.setHours(0, 0, 0, 0);
+			query.andWhere('s.created_at >= :startDate', { startDate: start });
+		}
+
+		if (endDate) {
+			const end = new Date(endDate);
+			end.setHours(23, 59, 59, 999);
+			query.andWhere('s.created_at <= :endDate', { endDate: end });
+		}
+
+		if (search && search.trim()) {
+			const term = search.trim();
+			const cleanTerm = term.replace(/^#/, '').trim();
+			const searchLike = `%${cleanTerm}%`;
+			const isNum = /^\d+$/.test(cleanTerm);
+
+			if (isNum) {
+				const saleId = parseInt(cleanTerm, 10);
+				query.andWhere(
+					'(s.id = :saleId OR CAST(s.id AS TEXT) ILIKE :searchLike OR c.national_id ILIKE :searchLike)',
+					{ saleId, searchLike },
+				);
+			} else {
+				query.andWhere(
+					'(CAST(s.id AS TEXT) ILIKE :searchLike OR c.national_id ILIKE :searchLike OR c.first_name ILIKE :searchLike OR c.last_name ILIKE :searchLike)',
+					{ searchLike },
+				);
+			}
+		}
+
+		const result = await query
 			.select([
 				's.id AS sale_id',
 				's.total AS sale_total',
@@ -53,6 +87,7 @@ export class SalesService {
 				's.status AS sale_status',
 				's.created_at AS sale_created_at',
 				'c.id AS customer_id',
+				'c.national_id AS customer_national_id',
 				'c.first_name AS customer_first_name',
 				'c.last_name AS customer_last_name',
 				'rr.id AS campaign_id',
@@ -71,6 +106,10 @@ export class SalesService {
 
 		for (const row of result) {
 			if (!salesMap.has(row.sale_id)) {
+				const customerName = row.customer_id
+					? `${row.customer_first_name || ''} ${row.customer_last_name || ''}`.trim()
+					: 'Consumidor Final';
+
 				salesMap.set(row.sale_id, {
 					id: row.sale_id,
 					total: row.sale_total,
@@ -78,7 +117,8 @@ export class SalesService {
 					createdAt: row.sale_created_at,
 					customer: {
 						id: row.customer_id,
-						name: `${row.customer_first_name} ${row.customer_last_name}`,
+						nationalId: row.customer_national_id ?? null,
+						name: customerName || 'Consumidor Final',
 					},
 					campaign: row.campaign_id
 						? { id: row.campaign_id, name: row.campaign_name }

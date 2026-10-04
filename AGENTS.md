@@ -3,6 +3,10 @@
 This file provides guidelines for agentic coding assistants working in this NestJS backend repository.
 
 > [!IMPORTANT]
+> **GESTOR DE PAQUETES OBLIGATORIO: PNPM**
+> Este proyecto utiliza **exclusivamente `pnpm`** como gestor de paquetes. Está estrictamente prohibido usar o cambiar a `npm` o `yarn` sin autorización explícita del usuario. Todos los comandos deben ejecutarse con `pnpm` (`pnpm run build`, `pnpm run start:dev`, `pnpm test`, `pnpm install`, etc.).
+
+> [!IMPORTANT]
 > **REGLA MANDATORIA DE ENTREGA DE REPORTES Y PLANES:**
 > Cada vez que el usuario solicite un análisis, detalles, plan de implementación, arquitectura o comparativa, **NUNCA** se debe volcar el contenido extenso como texto en el chat. **SIEMPRE** se debe generar y guardar en un archivo Markdown (`.md`) dentro de `docs/` en el repositorio para que el usuario pueda visualizarlo y leerlo claramente en el editor.
 
@@ -11,42 +15,40 @@ This file provides guidelines for agentic coding assistants working in this Nest
 
 ```bash
 # Build the project
-npm run build
+pnpm run build
 
 # Run development server with SWC (fast)
-npm run start:dev
+pnpm run start:dev
 
 # Run development server with SWC and type checking
-npm run start:dev:swc:types
+pnpm run start:dev:swc:types
 
 # Production build and start
-npm run build && npm run start:prod
+pnpm run build && pnpm run start:prod
 
 # Lint and auto-fix code issues
-npm run lint
+pnpm run lint
 
 # Format code with Prettier
-npm run format
+pnpm run format
 
 # Run all unit tests
-npm test
+pnpm test
 
 # Run tests in watch mode
-npm run test:watch
+pnpm run test:watch
 
 # Run tests with coverage report
-npm run test:cov
+pnpm run test:cov
 
 # Run e2e tests
-npm run test:e2e
+pnpm run test:e2e
 
 # Run a single test file
-jest path/to/test.spec.ts
-# or
-npm test -- path/to/test.spec.ts
+pnpm test -- path/to/test.spec.ts
 
 # Run tests matching a pattern
-npm test -- --testNamePattern="test name"
+pnpm test -- --testNamePattern="test name"
 ```
 
 ## Code Style Guidelines
