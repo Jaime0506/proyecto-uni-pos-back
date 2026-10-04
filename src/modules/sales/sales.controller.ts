@@ -7,7 +7,7 @@ import {
 	Request,
 	UseGuards,
 } from '@nestjs/common';
-import { PermissionGuard } from '../auth/authorization-guard';
+import { PermissionGuard, RequirePermissions } from '../auth/authorization-guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
@@ -22,11 +22,13 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 export class SalesController {
 	constructor(private readonly salesService: SalesService) {}
 
+	@RequirePermissions(['sale:read'])
 	@Post('get-all')
 	async getAllSales(@Body() getSalesDto: GetAllSalesDto) {
 		return await this.salesService.getAllSales(getSalesDto);
 	}
 
+	@RequirePermissions({ anyOf: ['customer:read', 'sale:read', 'sale:create'] })
 	@Get('/customers/get-all')
 	async getAllCustomers(
 		@Query('companyId') companyId: string,
@@ -44,6 +46,7 @@ export class SalesController {
 	}
 
 	// Buscar cliente por cédula exacta
+	@RequirePermissions({ anyOf: ['customer:read', 'sale:read', 'sale:create'] })
 	@Get('/customers/search')
 	async searchCustomerByNationalId(
 		@Query('nationalId') nationalId: string,
@@ -58,11 +61,13 @@ export class SalesController {
 	}
 
 	// Crear un cliente nuevo en la tienda
+	@RequirePermissions({ anyOf: ['customer:create', 'sale:create'] })
 	@Post('/customers/create')
 	async createCustomer(@Body() dto: CreateCustomerDto) {
 		return await this.salesService.createCustomer(dto);
 	}
 
+	@RequirePermissions(['sale:create'])
 	@Post('create')
 	async createSale(
 		@Body() createSaleDto: CreateSaleDto,

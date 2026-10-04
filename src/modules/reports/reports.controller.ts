@@ -10,7 +10,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PermissionGuard } from '../auth/authorization-guard';
+import { PermissionGuard, RequirePermissions } from '../auth/authorization-guard';
 import { ReportsService } from './reports.service';
 import { GetReportsDto } from './dto/get-reports.dto';
 
@@ -22,12 +22,14 @@ export class ReportsController {
 	constructor(private readonly reportsService: ReportsService) {}
 
 	// 1. VENTAS
+	@RequirePermissions(['report:read'])
 	@Get('sales')
 	@ApiOperation({ summary: 'Reporte general de ventas (Paginado)' })
 	async getSalesReport(@Query() getReportsDto: GetReportsDto) {
 		return await this.reportsService.getSalesReport(getReportsDto);
 	}
 
+	@RequirePermissions(['report:read'])
 	@Get('sales/export')
 	@ApiOperation({ summary: 'Exportar reporte de ventas a CSV' })
 	async exportSalesReport(
@@ -41,6 +43,7 @@ export class ReportsController {
 	}
 
 	// 2. INVENTARIO
+	@RequirePermissions(['report:read'])
 	@Get('inventory')
 	@ApiOperation({ summary: 'Reporte de inventario y alertas (Paginado)' })
 	async getInventoryReport(
@@ -54,6 +57,7 @@ export class ReportsController {
 		);
 	}
 
+	@RequirePermissions(['report:read'])
 	@Get('inventory/export')
 	@ApiOperation({ summary: 'Exportar reporte de inventario a CSV' })
 	async exportInventoryReport(
@@ -72,12 +76,14 @@ export class ReportsController {
 	}
 
 	// 3. CIERRES DE CAJA
+	@RequirePermissions(['report:read'])
 	@Get('cash-closures')
 	@ApiOperation({ summary: 'Reporte de cierres de caja (Paginado)' })
 	async getCashClosuresReport(@Query() getReportsDto: GetReportsDto) {
 		return await this.reportsService.getCashClosuresReport(getReportsDto);
 	}
 
+	@RequirePermissions(['report:read'])
 	@Get('cash-closures/export')
 	@ApiOperation({ summary: 'Exportar reporte de cierres de caja a CSV' })
 	async exportCashClosuresReport(
@@ -95,12 +101,14 @@ export class ReportsController {
 	}
 
 	// 4. MÁS VENDIDOS
+	@RequirePermissions(['report:read'])
 	@Get('top-selling')
 	@ApiOperation({ summary: 'Reporte de productos más vendidos (Paginado)' })
 	async getTopSellingProductsReport(@Query() getReportsDto: GetReportsDto) {
 		return await this.reportsService.getTopSellingProductsReport(getReportsDto);
 	}
 
+	@RequirePermissions(['report:read'])
 	@Get('top-selling/export')
 	@ApiOperation({ summary: 'Exportar reporte de más vendidos a CSV' })
 	async exportTopSellingProductsReport(
