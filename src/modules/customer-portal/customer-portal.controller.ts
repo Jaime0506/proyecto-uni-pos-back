@@ -16,9 +16,7 @@ import { VerifyCustomerPasswordDto } from './dto/verify-customer-password.dto';
 @ApiTags('Customer Portal (Public)')
 @Controller('customer-portal')
 export class CustomerPortalController {
-	constructor(
-		private readonly customerPortalService: CustomerPortalService,
-	) {}
+	constructor(private readonly customerPortalService: CustomerPortalService) {}
 
 	// Buscar cliente por cédula — devuelve todas las empresas/tiendas donde existe
 	@Get('lookup')
@@ -34,8 +32,7 @@ export class CustomerPortalController {
 			);
 		}
 
-		const result =
-			await this.customerPortalService.lookupCustomer(nationalId);
+		const result = await this.customerPortalService.lookupCustomer(nationalId);
 
 		return {
 			ok: true,
@@ -168,4 +165,3 @@ export class CustomerPortalController {
 		};
 	}
 }
-

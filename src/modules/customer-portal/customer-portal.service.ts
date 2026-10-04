@@ -101,22 +101,20 @@ export class CustomerPortalService {
 				[nationalId.trim()],
 			);
 
-			return rows.map(
-				(row: any): CustomerLookupResult => ({
-					customerId: Number(row.customer_id),
-					nationalId: row.national_id,
-					firstName: row.first_name ?? null,
-					lastName: row.last_name ?? null,
-					phone: row.phone ?? null,
-					email: row.email ?? null,
-					hasPassword: Boolean(row.has_password),
-					companyId: Number(row.company_id),
-					companyName: row.company_name,
-					storeId: Number(row.store_id),
-					storeName: row.store_name,
-					storeAddress: row.store_address ?? null,
-				}),
-			);
+			return rows.map((row: any): CustomerLookupResult => ({
+				customerId: Number(row.customer_id),
+				nationalId: row.national_id,
+				firstName: row.first_name ?? null,
+				lastName: row.last_name ?? null,
+				phone: row.phone ?? null,
+				email: row.email ?? null,
+				hasPassword: Boolean(row.has_password),
+				companyId: Number(row.company_id),
+				companyName: row.company_name,
+				storeId: Number(row.store_id),
+				storeName: row.store_name,
+				storeAddress: row.store_address ?? null,
+			}));
 		} catch (error) {
 			console.error(error);
 			if (error instanceof BadRequestException) throw error;
@@ -185,16 +183,14 @@ export class CustomerPortalService {
 				[customerId, companyId, storeId],
 			);
 
-			return rows.map(
-				(row: any): TransactionResult => ({
-					id: Number(row.id),
-					amount: Number(row.amount),
-					previousAmount: Number(row.previous_amount),
-					newAmount: Number(row.new_amount),
-					saleId: row.sale_id ? Number(row.sale_id) : null,
-					createdAt: row.created_at,
-				}),
-			);
+			return rows.map((row: any): TransactionResult => ({
+				id: Number(row.id),
+				amount: Number(row.amount),
+				previousAmount: Number(row.previous_amount),
+				newAmount: Number(row.new_amount),
+				saleId: row.sale_id ? Number(row.sale_id) : null,
+				createdAt: row.created_at,
+			}));
 		} catch (error) {
 			console.error(error);
 			throw new InternalServerErrorException(
@@ -394,4 +390,3 @@ export class CustomerPortalService {
 		}
 	}
 }
-

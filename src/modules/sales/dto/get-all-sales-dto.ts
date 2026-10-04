@@ -5,14 +5,16 @@ export class GetAllSalesDto {
 	@ApiProperty({ description: 'El id de la empresa' })
 	@IsNotEmpty()
 	@IsNumber()
-	companyId: number;
+	companyId!: number;
 
 	@ApiProperty({ description: 'El id de la tienda' })
 	@IsNotEmpty()
 	@IsNumber()
-	storeId: number;
+	storeId!: number;
 
-	@ApiPropertyOptional({ description: 'Fecha de inicio del rango (YYYY-MM-DD)' })
+	@ApiPropertyOptional({
+		description: 'Fecha de inicio del rango (YYYY-MM-DD)',
+	})
 	@IsOptional()
 	@IsString()
 	startDate?: string;
@@ -23,10 +25,10 @@ export class GetAllSalesDto {
 	endDate?: string;
 
 	@ApiPropertyOptional({
-		description: 'Texto de búsqueda por número de factura (ID) o cliente (cédula/nombre)',
+		description:
+			'Texto de búsqueda por número de factura (ID) o cliente (cédula/nombre)',
 	})
 	@IsOptional()
 	@IsString()
 	search?: string;
 }
-

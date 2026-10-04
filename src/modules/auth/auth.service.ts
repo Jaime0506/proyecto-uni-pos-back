@@ -91,7 +91,7 @@ export class AuthService {
 					username: user.username,
 					isSuperRoot: user.isSuperRoot,
 				},
-				{ expiresIn: (this.cfg.get('JWT_ACCESS_TTL') || '15m') as any },
+				{ expiresIn: this.cfg.get('JWT_ACCESS_TTL') || '15m' },
 			);
 
 			// refresh con mismo jti pero TTL largo
@@ -242,7 +242,7 @@ export class AuthService {
 				username: session.user.username,
 				isSuperRoot: session.user.isSuperRoot,
 			},
-			{ expiresIn: (this.cfg.get('JWT_ACCESS_TTL') || '30m') as any },
+			{ expiresIn: this.cfg.get('JWT_ACCESS_TTL') || '30m' },
 		);
 
 		return { accessToken };

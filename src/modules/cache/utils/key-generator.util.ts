@@ -20,7 +20,7 @@ export class CacheKeyGenerator {
 					if (typeof value === 'object') {
 						stringValue = JSON.stringify(value);
 					} else {
-						stringValue = String(value as string);
+						stringValue = String(value);
 					}
 					parts.push(`user:${field}:${stringValue}`);
 				}
@@ -58,7 +58,7 @@ export class CacheKeyGenerator {
 				const body = req.body as Record<string, unknown>;
 				const value = body[field];
 				if (value !== undefined && value !== null) {
-					parts.push(`${field}:${String(value as string)}`);
+					parts.push(`${field}:${String(value)}`);
 				}
 			});
 		}

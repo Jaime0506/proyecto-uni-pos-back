@@ -4,8 +4,7 @@ import { SetMetadata } from '@nestjs/common';
 export const PERMISSIONS_META_KEY = 'required_permissions';
 
 export type RequirePermissionsInput =
-	| string[]
-	| { allOf?: string[]; anyOf?: string[] };
+	string[] | { allOf?: string[]; anyOf?: string[] };
 
 export interface RequiredPermissions {
 	allOf: string[];

@@ -17,7 +17,10 @@ export class VerifyCustomerPasswordDto {
 	@IsPositive()
 	storeId!: number;
 
-	@ApiProperty({ description: 'Contraseña ingresada por el cliente', example: 'ClaveSegura123' })
+	@ApiProperty({
+		description: 'Contraseña ingresada por el cliente',
+		example: 'ClaveSegura123',
+	})
 	@IsString()
 	@IsNotEmpty({ message: 'La contraseña es requerida' })
 	password!: string;

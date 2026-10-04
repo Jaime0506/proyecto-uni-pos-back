@@ -143,9 +143,11 @@ export class UserService {
 			);
 		}
 
-		const targetMembership = await this.userCompanyMembershipRepository.findOne({
-			where: { userId: dto.id_user, companyId: membership.companyId },
-		});
+		const targetMembership = await this.userCompanyMembershipRepository.findOne(
+			{
+				where: { userId: dto.id_user, companyId: membership.companyId },
+			},
+		);
 
 		if (!targetMembership) {
 			throw new UnauthorizedException(

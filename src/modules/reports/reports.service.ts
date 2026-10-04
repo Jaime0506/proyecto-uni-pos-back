@@ -353,7 +353,7 @@ export class ReportsService {
 			userName:
 				row.user_first_name && row.user_last_name
 					? `${row.user_first_name} ${row.user_last_name}`.trim()
-					: (row.user_username || 'Desconocido'),
+					: row.user_username || 'Desconocido',
 			cantidadVentas: Number(row.total_sales_count),
 			ingresoTotal: Number(row.total_amount || 0),
 			descuentosTotal: Number(row.total_discount || 0),

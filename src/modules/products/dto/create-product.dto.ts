@@ -8,11 +8,11 @@ import {
 } from 'class-validator';
 
 export class CreateProductDto {
-    @ApiProperty({ example: 5 })
+	@ApiProperty({ example: 5 })
 	@IsNumber()
 	companyId: number;
 
-    @ApiProperty({ example: 5 })
+	@ApiProperty({ example: 5 })
 	@IsNumber()
 	storeId: number;
 

@@ -7,7 +7,9 @@ export class CreateCustomerDto {
 	@IsString()
 	nationalId!: string;
 
-	@ApiProperty({ description: 'ID de la empresa a la que pertenece el cliente' })
+	@ApiProperty({
+		description: 'ID de la empresa a la que pertenece el cliente',
+	})
 	@IsNotEmpty()
 	companyId!: number;
 
