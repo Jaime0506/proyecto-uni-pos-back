@@ -32,12 +32,23 @@ export class ProductsController {
 	}
 
 	@UseInterceptors(FileInterceptor('file'))
+	@Post('preview-upload')
+	async previewUpload(
+		@Body() body: any,
+		@UploadedFile() file: Express.Multer.File,
+	) {
+		return await this.productsService.previewUpload(body, file);
+	}
+
+	@UseInterceptors(FileInterceptor('file'))
 	@Post('uploadProductsByFile')
 	async uploadProductsByFile(
 		@Body() body: any,
 		@UploadedFile() file: Express.Multer.File,
+		@Req() req: any,
 	) {
-		return await this.productsService.uploadProducts(body, file);
+		const userId = req.user?.id || req.user?.sub;
+		return await this.productsService.uploadProducts(body, file, userId);
 	}
 
 	@Patch('update')
