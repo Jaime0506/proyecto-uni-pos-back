@@ -56,6 +56,7 @@ export interface CustomerPurchase {
 	claimBonus: boolean;
 	status: string;
 	channel: string;
+	paymentMethod?: string;
 	createdAt: Date;
 	itemsCount: number;
 	items: CustomerPurchaseItem[];
@@ -216,6 +217,7 @@ export class CustomerPortalService {
 					s.status          AS status,
 					s.channel         AS channel,
 					s.claim_bonus     AS claim_bonus,
+					s.payment_method  AS payment_method,
 					s.created_at      AS created_at,
 					si.id             AS item_id,
 					si.quantity       AS quantity,
@@ -249,6 +251,7 @@ export class CustomerPortalService {
 						claimBonus: Boolean(row.claim_bonus),
 						status: row.status,
 						channel: row.channel,
+						paymentMethod: row.payment_method || 'cash',
 						createdAt: row.created_at,
 						itemsCount: 0,
 						items: [],

@@ -3,7 +3,7 @@
 Este documento detalla el estado actual, brechas técnicas y el contraste exhaustivo de los requerimientos funcionales del **Módulo de Gestión de Ventas (todo el proceso de realizar una venta)** frente al código fuente existente en los proyectos [proyecto-uni-pos-back](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back) y [proyecto-uni-pos-front](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front).
 
 > **Fecha:** Octubre 2026  
-> **Estado Global:** **8 requerimientos completados (72.7%)**, **1 formalmente descartado (9.1% - V4)**, **1 parcialmente implementado (9.1% - V3)**, **1 pendiente de implementación (9.1% - V8)**.
+> **Estado Global:** **9 requerimientos completados (81.8%)**, **1 formalmente descartado (9.1% - V4)**, **1 parcialmente implementado (9.1% - V3)**, **0 pendientes de implementación (0%)**.
 
 ---
 
@@ -18,7 +18,7 @@ Este documento detalla el estado actual, brechas técnicas y el contraste exhaus
 | **V5** | Seleccionar método de pago (efectivo, transferencia, QR, etc.) | ✅ **Implementado** | **100%** | Columna `payment_method` en BD, [CreateSaleDto.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/dto/create-sale.dto.ts), selector interactivo [PaymentMethodSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/PaymentMethodSelector.tsx) con Efectivo (cálculo de cambio y billetes rápidos), Transferencia, QR Móvil y Tarjeta, y badges en [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx) |
 | **V6** | Asociar cada venta a cliente registrado o venta anónima | ✅ **Implementado** | **100%** | [CustomerSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/CustomerSelector.tsx)<br>[sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts#L187)<br>Etiqueta `"Consumidor Final"` en [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx) |
 | **V7** | Descontar automáticamente del inventario los productos vendidos | ✅ **Implementado** | **100%** | [sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts#L213-L223)<br>Validación frontend en [CreateSaleDialog.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/CreateSaleDialog.tsx#L108) |
-| **V8** | Generar comprobante digital de venta descargable en PDF | ❌ **Pendiente** | **0%** | Sin librerías ni botones de generación de PDF en backend ni frontend |
+| **V8** | Generar comprobante digital de venta descargable en PDF | ✅ **Implementado** | **100%** | Generación dinámica on-the-fly con `jspdf` y `jspdf-autotable` ([saleReceiptPdf.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/utils/saleReceiptPdf.ts)) en cliente sin persistir archivos en BD. Incluye visualizador digital integrado ([SaleReceiptModal.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SaleReceiptModal.tsx)) para ver en pantalla sin forzar descarga, con botones de Descarga PDF, Impresión y Abrir en pestaña nueva. Disponible tras venta ([SalesPage.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/pages/store/sales/SalesPage.tsx)), en el historial ([SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx)), y en el portal del cliente ([CustomerPortalPage.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/pages/customer-portal/CustomerPortalPage.tsx) y [PurchaseDetailModal.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/pages/customer-portal/PurchaseDetailModal.tsx)) |
 | **V9** | Registrar fecha y hora exacta de cada transacción | ✅ **Implementado** | **100%** | [sale.entity.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/entities/sale.entity.ts#L53)<br>`timestamptz` en PostgreSQL |
 | **V10** | Visualizar historial completo de ventas | ✅ **Implementado** | **100%** | [SalesPage.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/pages/store/sales/SalesPage.tsx)<br>[SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx) |
 | **V11** | Buscar ventas por fecha, cliente (cédula) o número de factura | ✅ **Implementado** | **100%** | [SalesFilters.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesFilters.tsx)<br>[sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts#L38-L80)<br>[GetAllSalesDto](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/dto/get-all-sales-dto.ts) |
@@ -33,10 +33,10 @@ Este documento detalla el estado actual, brechas técnicas y el contraste exhaus
 3. **Auditoría temporal estricta:** Todas las transacciones guardan fecha y hora con zona horaria (`timestamptz`) en PostgreSQL.
 4. **Historial visual detallado con filtros potentes:** La vista de ventas despliega tarjetas completas con desglose de ítems, precios unitarios, subtotales, cliente, campaña, estados y métodos de pago, con un buscador en tiempo real por número de venta (#), cédula y rango de fechas.
 5. **Multi-método de pago integrado:** Soporte completo para Efectivo con cálculo de cambio, QR Móvil, Transferencia bancaria y Tarjeta.
+6. **Comprobante digital descargable en PDF:** Generación bajo demanda en el cliente con formato estético profesional de factura/recibo POS, disponible en el POS (en caliente tras la venta y en el historial) y en el portal de autoservicio del cliente.
 
 ### Brechas Restantes (Funcionalidades Pendientes)
 1. **Cálculo y desglose de impuestos (IVA) (V3):** La base de datos tiene `tax_total`, `vat_rate` y `vat_amount`, y `Product` tiene `taxExempt`, pero el frontend no calcula ni muestra IVA, y el backend los graba en 0 o null.
-2. **Comprobante digital descargable en PDF (V8):** No existe generación ni descarga de PDF para la venta.
 
 ---
 
@@ -73,8 +73,8 @@ Este documento detalla el estado actual, brechas técnicas y el contraste exhaus
 * **Evaluación:** Resta la cantidad de cada ítem del `Product.stock`. Se recomienda agregar una validación de seguridad previa para confirmar stock positivo antes del guardado.
 
 ### V8. Comprobante digital descargable en PDF
-* **Código:** No implementado.
-* **Evaluación:** Se requiere implementar un generador de PDF (por ejemplo en el cliente con `jsPDF` + `jspdf-autotable` o mediante utilidades nativas de impresión de comprobante/factura en formato ticket térmico y carta) con botón de descarga tanto al momento de completar la venta como en el historial de ventas.
+* **Código:** `saleReceiptPdf.ts`, `SaleReceiptModal.tsx`, `SalesPage.tsx`, `SalesCardsGrid.tsx`, `CustomerPortalPage.tsx`, `PurchaseDetailModal.tsx`.
+* **Evaluación:** Cumplido al 100%. Generación dinámica sin almacenamiento físico ni binario en base de datos. Se utiliza `jsPDF` y `jspdf-autotable` para construir en el navegador un comprobante formal con encabezado empresarial, sede comercial, número de venta/factura, datos del cliente, método de pago, desglose tabular de productos, totales y pie de página legal. Cuenta con un visualizador digital en modal (`SaleReceiptModal`) que permite ver el PDF directamente dentro del sistema sin necesidad de descargarlo al disco, ofreciendo botones dedicados para Descargar PDF, Imprimir o Abrir en pestaña nueva. Disponible inmediatamente tras registrar una venta (toast interactivo con acción de ver factura), en cada tarjeta del historial de ventas (`SalesCardsGrid`), y en el portal del cliente (tanto en la lista de compras como en el modal de detalle).
 
 ### V9. Registro de fecha y hora exacta
 * **Código:** `sale.entity.ts` (`@CreateDateColumn({ type: 'timestamptz' })`).
@@ -85,7 +85,6 @@ Este documento detalla el estado actual, brechas técnicas y el contraste exhaus
 * **Evaluación:** Cumplido al 100%.
 
 ### V11. Búsqueda por fecha, cliente o número de factura
-* **Código:** `SalesHeader.tsx`, `GetAllSalesDto`, `sales.service.ts`.
-* **Evaluación:** 
-  - Backend: Extender `GetAllSalesDto` y la consulta QueryBuilder para aceptar `search` (número de venta o cliente) y `startDate` / `endDate`.
-  - Frontend: Agregar en `SalesHeader.tsx` o debajo de él los inputs de búsqueda por texto y selector de fechas, con filtrado reactivo.
+* **Código:** `SalesFilters.tsx`, `SalesPage.tsx`, `GetAllSalesDto`, `sales.service.ts`.
+* **Evaluación:** Cumplido al 100%. Cuenta con arquitectura de doble filtro: búsqueda reactiva e instantánea (0ms) en memoria mientras el cajero escribe (por `#ID`, número, cédula o nombre de cliente) sincronizada con debounce hacia el backend con filtros combinados por rango de fechas (`startDate` y `endDate`).
+

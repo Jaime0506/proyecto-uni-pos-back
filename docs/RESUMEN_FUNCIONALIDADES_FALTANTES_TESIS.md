@@ -13,7 +13,7 @@ Este documento consolida el estado global de cumplimiento, requerimientos implem
 | Módulo de Tesis | Requerimientos Totales | Completados | Descartados (Justificados) | Pendientes / En Progreso | Estado Global |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Módulo 1: Ingreso Seguro** | 5 (B1 a B5) | 4 (80%) | 1 (20% - B2) | 0 (0%) | **100% Culminado** |
-| **Módulo 2: Gestión de Ventas** | 11 (V1 a V11) | 8 (72.7%) | 1 (9.1% - V4) | 2 (18.2% - V3, V8) | **En Proceso de Cierre** |
+| **Módulo 2: Gestión de Ventas** | 11 (V1 a V11) | 9 (81.8%) | 1 (9.1% - V4) | 1 (9.1% - V3) | **En Proceso de Cierre** |
 
 ---
 
@@ -30,7 +30,7 @@ Este documento consolida el estado global de cumplimiento, requerimientos implem
 | **V5** | Seleccionar método de pago (efectivo, transferencia, QR, etc.) | ✅ **Completado** | **100%** | Columna `payment_method` en base de datos PostgreSQL, DTO validado en NestJS (`CreateSaleDto`), selector interactivo [PaymentMethodSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/PaymentMethodSelector.tsx) con soporte para Efectivo (cálculo de cambio en vivo y botones de billetes rápidos de $10k, $20k, $50k, $100k y exacto), Transferencia, QR Móvil (Nequi/Daviplata) y Tarjeta, persistencia en checkout y badges visuales distintivos en el historial de ventas [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx). |
 | **V6** | Asociar venta a cliente registrado o venta anónima | ✅ **Completado** | **100%** | Búsqueda por cédula con debounce y creación rápida inline en [CustomerSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/CustomerSelector.tsx). Si no se selecciona cliente, se graba `customer_id: null` y se identifica formalmente como *"Consumidor Final"*. |
 | **V7** | Descontar automáticamente del inventario los productos vendidos | ✅ **Completado** | **100%** | Validación reactiva contra `stock` en cliente y deducción atómica en base de datos en [sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts#L213-L223) mediante `processTransaction`. |
-| **V8** | Generar comprobante digital de venta descargable en PDF | ❌ **Pendiente** | **0%** | Falta utilidad de renderizado y descarga de comprobante en PDF (con formato ticket y carta) post-venta y desde el historial. |
+| **V8** | Generar comprobante digital de venta descargable en PDF | ✅ **Completado** | **100%** | Generación dinámica on-the-fly en el cliente con `jspdf` y `jspdf-autotable` ([saleReceiptPdf.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/utils/saleReceiptPdf.ts)), sin almacenar pesados blobs en base de datos. Visualizador integrado en modal ([SaleReceiptModal.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SaleReceiptModal.tsx)) para ver la factura en pantalla sin descargarla a disco forzosamente, con opciones de descarga, impresión y apertura en pestaña nueva. Disponible inmediatamente post-venta en [SalesPage.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/pages/store/sales/SalesPage.tsx), bajo demanda en cada tarjeta de [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx), y para el cliente en el portal [CustomerPortalPage.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/pages/customer-portal/CustomerPortalPage.tsx) y [PurchaseDetailModal.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/pages/customer-portal/PurchaseDetailModal.tsx). |
 | **V9** | Registrar fecha y hora exacta de cada transacción | ✅ **Completado** | **100%** | Persistencia PostgreSQL con microsegundos y zona horaria (`@CreateDateColumn timestamptz`) y visualización en formato local `es-CO`. |
 | **V10** | Visualizar el historial completo de ventas | ✅ **Completado** | **100%** | Cuadrícula detallada [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx) con desglose de ítems, precios unitarios, bonificaciones, estado y cliente. |
 | **V11** | Buscar ventas por fecha, cliente (cédula) o número de factura | ✅ **Completado** | **100%** | Componente [SalesFilters.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesFilters.tsx) con filtrado reactivo dual (en memoria instantáneo 0ms + debounce a backend), filtros de rango de fechas y soporte multi-criterio en backend. |
@@ -39,18 +39,9 @@ Este documento consolida el estado global de cumplimiento, requerimientos implem
 
 ### 2.2 Inventario Detallado de Funcionalidades Pendientes (Próximos Pasos)
 
-A continuación se detalla el alcance técnico exacto de las **2 funcionalidades pendientes** del Módulo de Ventas:
+A continuación se detalla el alcance técnico exacto de la **última funcionalidad pendiente** del Módulo de Ventas:
 
-#### 1. Requerimiento V8: Comprobante Digital de Venta Descargable en PDF
-* **Objetivo:** Generar y permitir descargar inmediatamente el comprobante o factura digital en PDF al culminar la venta o bajo demanda desde el historial.
-* **Tareas Técnicas:**
-  * **Frontend:**
-    - Instalar dependencias con pnpm: `pnpm add jspdf jspdf-autotable`.
-    - Crear servicio generador `src/utils/saleReceiptPdf.ts` con diseño profesional de comprobante (datos del negocio, sede, número de factura/venta, fecha/hora exacta, cajero, cliente con cédula, tabla de productos, subtotales, IVA discriminado, descuentos/bonos, método de pago y total).
-    - Agregar diálogo modal post-venta *"¡Venta exitosa!"* con botón directo *"Descargar Factura PDF"*.
-    - Agregar botón de descarga directa de PDF con icono de descarga en cada tarjeta de [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx).
-
-#### 2. Requerimiento V3 (Completitud): Cálculo y Desglose Automático de Impuestos (IVA)
+#### 1. Requerimiento V3 (Completitud): Cálculo y Desglose Automático de Impuestos (IVA)
 * **Objetivo:** Calcular automáticamente el IVA correspondiente a los productos gravados frente a los exentos (`product.taxExempt`).
 * **Tareas Técnicas:**
   * **Frontend:**
