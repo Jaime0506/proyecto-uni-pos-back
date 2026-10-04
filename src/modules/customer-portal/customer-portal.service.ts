@@ -45,6 +45,8 @@ export interface CustomerPurchaseItem {
 	productImage?: string | null;
 	quantity: number;
 	unitPrice: number;
+	vatRate?: number;
+	vatAmount?: number;
 	lineTotal: number;
 }
 
@@ -52,6 +54,7 @@ export interface CustomerPurchase {
 	id: number;
 	total: number;
 	subtotal: number;
+	taxTotal?: number;
 	discountTotal: number;
 	claimBonus: boolean;
 	status: string;
@@ -213,6 +216,7 @@ export class CustomerPortalService {
 					s.id              AS sale_id,
 					s.total           AS total,
 					s.subtotal        AS subtotal,
+					s.tax_total       AS tax_total,
 					s.discount_total  AS discount_total,
 					s.status          AS status,
 					s.channel         AS channel,
@@ -222,6 +226,8 @@ export class CustomerPortalService {
 					si.id             AS item_id,
 					si.quantity       AS quantity,
 					si.unit_price     AS unit_price,
+					si.vat_rate       AS vat_rate,
+					si.vat_amount     AS vat_amount,
 					si.line_total     AS line_total,
 					si.product_id     AS product_id,
 					COALESCE(p.name, 'Producto no disponible') AS product_name,
@@ -247,6 +253,7 @@ export class CustomerPortalService {
 						id: saleId,
 						total: Number(row.total),
 						subtotal: Number(row.subtotal),
+						taxTotal: Number(row.tax_total || 0),
 						discountTotal: Number(row.discount_total),
 						claimBonus: Boolean(row.claim_bonus),
 						status: row.status,
@@ -267,6 +274,8 @@ export class CustomerPortalService {
 						productImage: row.product_image ?? null,
 						quantity: Number(row.quantity),
 						unitPrice: Number(row.unit_price),
+						vatRate: Number(row.vat_rate || 0),
+						vatAmount: Number(row.vat_amount || 0),
 						lineTotal: Number(row.line_total),
 					});
 					purchase.itemsCount += Number(row.quantity);

@@ -13,7 +13,7 @@ Este documento consolida el estado global de cumplimiento, requerimientos implem
 | Módulo de Tesis | Requerimientos Totales | Completados | Descartados (Justificados) | Pendientes / En Progreso | Estado Global |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Módulo 1: Ingreso Seguro** | 5 (B1 a B5) | 4 (80%) | 1 (20% - B2) | 0 (0%) | **100% Culminado** |
-| **Módulo 2: Gestión de Ventas** | 11 (V1 a V11) | 9 (81.8%) | 1 (9.1% - V4) | 1 (9.1% - V3) | **En Proceso de Cierre** |
+| **Módulo 2: Gestión de Ventas** | 11 (V1 a V11) | 10 (90.9%) | 1 (9.1% - V4) | 0 (0%) | **100% Culminado** |
 
 ---
 
@@ -25,7 +25,7 @@ Este documento consolida el estado global de cumplimiento, requerimientos implem
 | :---: | :--- | :---: | :---: | :--- |
 | **V1** | Registrar nueva venta desde interfaz amigable | ✅ **Completado** | **100%** | Modal POS full-screen [CreateSaleDialog.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/CreateSaleDialog.tsx) con layout responsive de dos columnas y gestión ágil de artículos. |
 | **V2** | Seleccionar múltiples productos para una misma venta | ✅ **Completado** | **100%** | Selector multi-artículo [ProductSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/ProductSelector.tsx), hook [useProductSelection.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/hooks/useProductSelection.ts) e inserción en lote en [sale-items.entity.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/entities/sale-items.entity.ts). |
-| **V3** | Calcular automáticamente subtotal, impuestos y total | ⚠️ **Parcial** | **40%** | Calcula subtotal y total en [useSaleSummary.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/hooks/useSaleSummary.ts). **Pendiente:** cálculo de IVA (19% o exento según `product.taxExempt`) y desglose en interfaz y backend (`tax_total`, `vat_rate`, `vat_amount`). |
+| **V3** | Calcular automáticamente subtotal, impuestos y total | ✅ **Completado** | **100%** | Motor de liquidación fiscal en [useSaleSummary.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/hooks/useSaleSummary.ts) con cálculo reactivo de Base Gravable, Base Exenta e IVA (19%) según `product.taxExempt`. Desglose en [SaleSummary.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SaleSummary.tsx), persistencia atómica e inmutable en [sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts) (`subtotal`, `tax_total`, `vat_rate`, `vat_amount`, `line_total`), desglose en factura PDF ([saleReceiptPdf.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/utils/saleReceiptPdf.ts)), en tarjetas POS ([SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx)) y en el portal del cliente ([PurchaseDetailModal.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/pages/customer-portal/PurchaseDetailModal.tsx)). Protegido contractualmente como snapshot histórico inalterable ante futuros cambios en el catálogo. |
 | **V4** | Aplicar descuentos manuales sobre el total de la venta | 🚫 **Descartado** | **N/A** | **Justificación formal de control financiero:** Se previene el fraude y descuadre de caja por descuentos discrecionales del cajero. Los descuentos se gobiernan mediante el motor auditado de Campañas y Bonificaciones (`reward_rules`). |
 | **V5** | Seleccionar método de pago (efectivo, transferencia, QR, etc.) | ✅ **Completado** | **100%** | Columna `payment_method` en base de datos PostgreSQL, DTO validado en NestJS (`CreateSaleDto`), selector interactivo [PaymentMethodSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/PaymentMethodSelector.tsx) con soporte para Efectivo (cálculo de cambio en vivo y botones de billetes rápidos de $10k, $20k, $50k, $100k y exacto), Transferencia, QR Móvil (Nequi/Daviplata) y Tarjeta, persistencia en checkout y badges visuales distintivos en el historial de ventas [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx). |
 | **V6** | Asociar venta a cliente registrado o venta anónima | ✅ **Completado** | **100%** | Búsqueda por cédula con debounce y creación rápida inline en [CustomerSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/CustomerSelector.tsx). Si no se selecciona cliente, se graba `customer_id: null` y se identifica formalmente como *"Consumidor Final"*. |
@@ -37,18 +37,16 @@ Este documento consolida el estado global de cumplimiento, requerimientos implem
 
 ---
 
-### 2.2 Inventario Detallado de Funcionalidades Pendientes (Próximos Pasos)
+### 2.2 Balance del Módulo de Gestión de Ventas
 
-A continuación se detalla el alcance técnico exacto de la **última funcionalidad pendiente** del Módulo de Ventas:
+**Todos los requerimientos funcionales del Módulo de Gestión de Ventas han sido completados al 100%** (10 implementados en código de producción y 1 descartado bajo justificación formal de control financiero anti-fraude). No restan requerimientos pendientes en este módulo.
 
-#### 1. Requerimiento V3 (Completitud): Cálculo y Desglose Automático de Impuestos (IVA)
-* **Objetivo:** Calcular automáticamente el IVA correspondiente a los productos gravados frente a los exentos (`product.taxExempt`).
-* **Tareas Técnicas:**
-  * **Frontend:**
-    - En [useSaleSummary.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/hooks/useSaleSummary.ts), calcular el impuesto por línea para productos donde `taxExempt === false` (tasa estándar 19%).
-    - En [SaleSummary.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SaleSummary.tsx), desglosar: *Subtotal base gravable*, *Impuesto IVA (19%)*, *Total final*.
-  * **Backend:**
-    - En [sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts), persistir `sale.tax_total` y para cada ítem en `SaleItem` asignar `vat_rate: 19` y `vat_amount` correspondiente.
+### 2.3 Blindaje de Calidad e Integridad Fiscal y Comercial Implementado
+
+1. **Snapshot Fiscal Inmutable (V3):** El cálculo de Base Imponible, Base Exenta e IVA (19%) queda registrado de forma inalterable en `sale_items` y `sales`. Cambios futuros en tarifas fiscales o en el catálogo de productos no alteran las ventas históricas ni las facturas emitidas.
+2. **Control Estricto de Expiración y Vigencia de Campañas (`RewardRule`):**
+   - **Frontend:** Filtro reactivo en [useCampaignLogic.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/hooks/useCampaignLogic.ts) que impide listar o seleccionar campañas inactivas (`isActive = false`), no iniciadas (`now < startsAt`) o vencidas (`now > endsAt`). Deselección automática en tiempo real si expira durante la sesión. Indicador visual con badge *"Vigente"* y fecha exacta de vencimiento en [CampaignSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/CampaignSelector.tsx).
+   - **Backend:** Validación atómica y transaccional en [sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts) que verifica vigencia cronológica, estado de activación y pertenencia a la empresa y tienda antes de procesar la venta. Ver informe técnico en [INFORME_CORRECCION_CAMPAÑAS_VENCIDAS_POS.md](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/docs/INFORME_CORRECCION_CAMPA%C3%91AS_VENCIDAS_POS.md).
 
 ---
 

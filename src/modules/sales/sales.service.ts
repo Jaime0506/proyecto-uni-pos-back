@@ -11,6 +11,7 @@ import { Sale } from './entities/sale.entity';
 import { SaleItem } from './entities/sale-items.entity';
 import { Bonus } from './entities/bonuses.entity';
 import { Product } from '../products/entities/product.entity';
+import { RewardRule } from '../rewards/entities/reward-rule.entity';
 import { processTransaction } from 'src/database/transactions';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -84,6 +85,8 @@ export class SalesService {
 			.select([
 				's.id AS sale_id',
 				's.total AS sale_total',
+				's.subtotal AS sale_subtotal',
+				's.tax_total AS sale_tax_total',
 				's.discount_total AS discount_total',
 				's.status AS sale_status',
 				's.payment_method AS sale_payment_method',
@@ -97,6 +100,8 @@ export class SalesService {
 				'si.id AS item_id',
 				'si.quantity AS item_quantity',
 				'si.unit_price AS item_unit_price',
+				'si.vat_rate AS item_vat_rate',
+				'si.vat_amount AS item_vat_amount',
 				'si.line_total AS item_total',
 				'p.name AS product_name',
 			])
@@ -115,6 +120,8 @@ export class SalesService {
 				salesMap.set(row.sale_id, {
 					id: row.sale_id,
 					total: row.sale_total,
+					subtotal: row.sale_subtotal ?? row.sale_total,
+					taxTotal: row.sale_tax_total ?? 0,
 					status: row.sale_status,
 					paymentMethod: row.sale_payment_method || 'cash',
 					createdAt: row.sale_created_at,
@@ -137,6 +144,8 @@ export class SalesService {
 					id: row.item_id,
 					quantity: Number(row.item_quantity),
 					unitPrice: Number(row.item_unit_price),
+					vatRate: Number(row.item_vat_rate || 0),
+					vatAmount: Number(row.item_vat_amount || 0),
 					total: Number(row.item_total),
 					productName: row.product_name,
 				});
@@ -218,18 +227,123 @@ export class SalesService {
 		console.log('createSaleDto:', createSaleDto);
 		return processTransaction(this.dataSource, async (queryRunner) => {
 			const claimBonus = createSaleDto.claimBonus || false;
-			const subtotal = createSaleDto.total;
+
+			// 0. Si se especificó una campaña, validar que exista, esté activa y vigente
+			if (createSaleDto.campaignId) {
+				const campaign = await queryRunner.manager.findOne(RewardRule, {
+					where: { id: createSaleDto.campaignId },
+				});
+
+				if (!campaign) {
+					throw new BadRequestException(
+						`La campaña con ID ${createSaleDto.campaignId} no existe.`,
+					);
+				}
+
+				if (!campaign.isActive) {
+					throw new BadRequestException(
+						`La campaña "${campaign.title}" se encuentra inactiva.`,
+					);
+				}
+
+				const now = new Date();
+				if (campaign.startsAt && now < new Date(campaign.startsAt)) {
+					throw new BadRequestException(
+						`La campaña "${campaign.title}" aún no ha comenzado.`,
+					);
+				}
+
+				if (campaign.endsAt && now > new Date(campaign.endsAt)) {
+					throw new BadRequestException(
+						`La campaña "${campaign.title}" ha finalizado y se encuentra vencida.`,
+					);
+				}
+
+				if (
+					campaign.companyId &&
+					Number(campaign.companyId) !== Number(createSaleDto.companyId)
+				) {
+					throw new BadRequestException(
+						`La campaña "${campaign.title}" no pertenece a la empresa de esta venta.`,
+					);
+				}
+
+				if (
+					campaign.storeId &&
+					Number(campaign.storeId) !== Number(createSaleDto.storeId)
+				) {
+					throw new BadRequestException(
+						`La campaña "${campaign.title}" no pertenece a la tienda de esta venta.`,
+					);
+				}
+			}
+
+			// 1. Obtener y validar entidades de productos en inventario
+			const productEntitiesMap = new Map<number, Product>();
+			for (const p of createSaleDto.products) {
+				const productEntity = await queryRunner.manager.findOne(Product, {
+					where: { id: p.id },
+				});
+
+				if (!productEntity) {
+					throw new BadRequestException(`Producto con ID ${p.id} no encontrado.`);
+				}
+
+				if (productEntity.stock < p.quantity) {
+					throw new BadRequestException(
+						`Stock insuficiente para el producto "${productEntity.name}". Disponible: ${productEntity.stock}, solicitado: ${p.quantity}.`,
+					);
+				}
+
+				productEntitiesMap.set(p.id, productEntity);
+			}
+
+			// 2. Liquidar ítems con snapshot inmutable de precios e IVA histórico
+			let computedSubtotal = 0;
+			let computedTaxTotal = 0;
+
+			const saleItemsData = createSaleDto.products.map((p) => {
+				const prod = productEntitiesMap.get(p.id)!;
+				const isExempt = Boolean(prod.taxExempt);
+				const vatRate = p.vat_rate !== undefined ? Number(p.vat_rate) : (isExempt ? 0 : 19);
+				const unitPrice = Number(p.unit_price);
+				const lineSubtotal = unitPrice * p.quantity;
+				const vatAmount = p.vat_amount !== undefined
+					? Number(p.vat_amount)
+					: (vatRate > 0 ? Math.round(lineSubtotal * (vatRate / 100) * 100) / 100 : 0);
+				const lineTotal = Number(p.line_total) || (lineSubtotal + vatAmount);
+
+				computedSubtotal += lineSubtotal;
+				computedTaxTotal += vatAmount;
+
+				return {
+					product_id: p.id,
+					quantity: p.quantity,
+					unit_price: unitPrice,
+					discount: 0,
+					vat_rate: vatRate,
+					vat_amount: vatAmount,
+					line_total: lineTotal,
+				};
+			});
+
+			const subtotalFinal = createSaleDto.subtotal !== undefined ? Number(createSaleDto.subtotal) : computedSubtotal;
+			const taxTotalFinal = createSaleDto.tax_total !== undefined ? Number(createSaleDto.tax_total) : computedTaxTotal;
 			const discount = createSaleDto.discount_total || 0;
 			const bonusUsed = claimBonus ? discount : 0;
-			const totalFinal = subtotal - bonusUsed;
+			const totalFinal = createSaleDto.total !== undefined
+				? Number(createSaleDto.total)
+				: (subtotalFinal + taxTotalFinal - bonusUsed);
 
+			// 3. Crear cabecera inmutable de venta
 			const sale = queryRunner.manager.create(Sale, {
 				company_id: createSaleDto.companyId,
 				store_id: createSaleDto.storeId,
 				user_id: userId,
 				customer_id: createSaleDto.customerId ?? undefined,
 				campaign_id: createSaleDto.campaignId ?? undefined,
-				subtotal: subtotal,
+				subtotal: subtotalFinal,
+				tax_total: taxTotalFinal,
 				discount_total: discount,
 				total: totalFinal,
 				claim_bonus: claimBonus,
@@ -240,30 +354,19 @@ export class SalesService {
 
 			const savedSale = await queryRunner.manager.save(Sale, sale);
 
-			const saleItems = createSaleDto.products.map((p) => ({
+			// 4. Insertar los ítems con su relación sale_id
+			const saleItems = saleItemsData.map((item) => ({
+				...item,
 				sale_id: savedSale.id,
-				product_id: p.id,
-				quantity: p.quantity,
-				unit_price: Number(p.unit_price),
-				line_total: Number(p.line_total),
-				discount: 0,
-				vat_rate: undefined,
-				vat_amount: 0,
 			}));
 
 			await queryRunner.manager.insert(SaleItem, saleItems);
 
-			// Actualizar stock de productos
+			// 5. Actualizar stock de productos de forma atómica
 			for (const product of createSaleDto.products) {
-				const productEntity = await queryRunner.manager.findOne(Product, {
-					where: { id: product.id },
-				});
-
-				if (productEntity) {
-					// Restar la cantidad vendida del stock
-					productEntity.stock = productEntity.stock - product.quantity;
-					await queryRunner.manager.save(Product, productEntity);
-				}
+				const productEntity = productEntitiesMap.get(product.id)!;
+				productEntity.stock = productEntity.stock - product.quantity;
+				await queryRunner.manager.save(Product, productEntity);
 			}
 
 			// Proceso de bonificación

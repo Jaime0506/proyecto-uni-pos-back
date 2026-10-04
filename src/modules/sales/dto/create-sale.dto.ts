@@ -32,6 +32,16 @@ export class CreateSaleItemDto {
 	@IsNotEmpty()
 	@IsNumber()
 	line_total!: number;
+
+	@ApiPropertyOptional({ description: 'Tasa porcentual de IVA aplicada (ej: 19 o 0)' })
+	@IsOptional()
+	@IsNumber()
+	vat_rate?: number;
+
+	@ApiPropertyOptional({ description: 'Monto de IVA liquidado para esta línea' })
+	@IsOptional()
+	@IsNumber()
+	vat_amount?: number;
 }
 
 export class CreateSaleDto {
@@ -63,6 +73,16 @@ export class CreateSaleDto {
 	@ValidateNested({ each: true })
 	@Type(() => CreateSaleItemDto)
 	products!: CreateSaleItemDto[];
+
+	@ApiPropertyOptional({ description: 'Subtotal base antes de impuestos' })
+	@IsOptional()
+	@IsNumber()
+	subtotal?: number;
+
+	@ApiPropertyOptional({ description: 'Total consolidado de impuestos (IVA)' })
+	@IsOptional()
+	@IsNumber()
+	tax_total?: number;
 
 	@ApiProperty({ description: 'Total de la venta' })
 	@IsNotEmpty()

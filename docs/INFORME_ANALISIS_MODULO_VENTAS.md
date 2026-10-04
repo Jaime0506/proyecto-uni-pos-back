@@ -3,7 +3,7 @@
 Este documento detalla el estado actual, brechas técnicas y el contraste exhaustivo de los requerimientos funcionales del **Módulo de Gestión de Ventas (todo el proceso de realizar una venta)** frente al código fuente existente en los proyectos [proyecto-uni-pos-back](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back) y [proyecto-uni-pos-front](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front).
 
 > **Fecha:** Octubre 2026  
-> **Estado Global:** **9 requerimientos completados (81.8%)**, **1 formalmente descartado (9.1% - V4)**, **1 parcialmente implementado (9.1% - V3)**, **0 pendientes de implementación (0%)**.
+> **Estado Global:** **10 requerimientos completados (90.9%)**, **1 formalmente descartado (9.1% - V4)**, **0 pendientes de implementación (0%)**. **Módulo de Ventas 100% Culminado.**
 
 ---
 
@@ -13,7 +13,7 @@ Este documento detalla el estado actual, brechas técnicas y el contraste exhaus
 | :---: | :--- | :---: | :---: | :--- |
 | **V1** | Registrar una nueva venta desde una interfaz amigable | ✅ **Implementado** | **100%** | [SalesPage.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/pages/store/sales/SalesPage.tsx)<br>[CreateSaleDialog.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/CreateSaleDialog.tsx) |
 | **V2** | Seleccionar múltiples productos para una misma venta | ✅ **Implementado** | **100%** | [ProductSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/ProductSelector.tsx)<br>[useProductSelection.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/hooks/useProductSelection.ts)<br>[sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts#L199-L210) |
-| **V3** | Calcular automáticamente subtotal, impuestos y total | ⚠️ **Parcial** | **40%** | [useSaleSummary.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/hooks/useSaleSummary.ts)<br>[SaleSummary.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SaleSummary.tsx)<br>[sale.entity.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/entities/sale.entity.ts) |
+| **V3** | Calcular automáticamente subtotal, impuestos y total | ✅ **Implementado** | **100%** | [useSaleSummary.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/hooks/useSaleSummary.ts)<br>[SaleSummary.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SaleSummary.tsx)<br>[sale.entity.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/entities/sale.entity.ts)<br>[sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts)<br>[saleReceiptPdf.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/utils/saleReceiptPdf.ts) |
 | **V4** | Aplicar descuentos manuales sobre el total de la venta | 🚫 **Descartado / Excluido** | **N/A** | **Justificación:** Control financiero y política anti-fraude. Los descuentos están formalmente gobernados y auditados por el motor de Campañas y Bonificaciones (`reward_rules`). |
 | **V5** | Seleccionar método de pago (efectivo, transferencia, QR, etc.) | ✅ **Implementado** | **100%** | Columna `payment_method` en BD, [CreateSaleDto.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/dto/create-sale.dto.ts), selector interactivo [PaymentMethodSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/PaymentMethodSelector.tsx) con Efectivo (cálculo de cambio y billetes rápidos), Transferencia, QR Móvil y Tarjeta, y badges en [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx) |
 | **V6** | Asociar cada venta a cliente registrado o venta anónima | ✅ **Implementado** | **100%** | [CustomerSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/CustomerSelector.tsx)<br>[sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts#L187)<br>Etiqueta `"Consumidor Final"` en [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx) |
@@ -34,9 +34,11 @@ Este documento detalla el estado actual, brechas técnicas y el contraste exhaus
 4. **Historial visual detallado con filtros potentes:** La vista de ventas despliega tarjetas completas con desglose de ítems, precios unitarios, subtotales, cliente, campaña, estados y métodos de pago, con un buscador en tiempo real por número de venta (#), cédula y rango de fechas.
 5. **Multi-método de pago integrado:** Soporte completo para Efectivo con cálculo de cambio, QR Móvil, Transferencia bancaria y Tarjeta.
 6. **Comprobante digital descargable en PDF:** Generación bajo demanda en el cliente con formato estético profesional de factura/recibo POS, disponible en el POS (en caliente tras la venta y en el historial) y en el portal de autoservicio del cliente.
+7. **Motor de liquidación y snapshot fiscal inmutable:** Cálculo reactivo de Base Gravable, Base Exenta e IVA (19%) con snapshot histórico inmutable en base de datos que garantiza que modificaciones futuras en el catálogo no alteren transacciones pasadas.
+8. **Control de vigencia y expiración de campañas de bonificación:** Validación dual (frontend y backend) que asegura que únicamente campañas activas (`isActive = true`) y no vencidas (`startsAt <= now <= endsAt`) puedan seleccionarse o procesarse durante una venta.
 
-### Brechas Restantes (Funcionalidades Pendientes)
-1. **Cálculo y desglose de impuestos (IVA) (V3):** La base de datos tiene `tax_total`, `vat_rate` y `vat_amount`, y `Product` tiene `taxExempt`, pero el frontend no calcula ni muestra IVA, y el backend los graba en 0 o null.
+### Brechas Restantes
+* **Ninguna.** El 100% de los requerimientos funcionales del módulo están implementados y verificados.
 
 ---
 
@@ -51,10 +53,8 @@ Este documento detalla el estado actual, brechas técnicas y el contraste exhaus
 * **Evaluación:** Selección simultánea con control de cantidades individuales mediante botones +/- e input numérico directo.
 
 ### V3. Cálculo de subtotal, impuestos y total
-* **Código:** `useSaleSummary.ts`, `SaleSummary.tsx`, `sale.entity.ts`, `sales.service.ts`.
-* **Evaluación:** 
-  - Subtotal y total se calculan de inmediato.
-  - **Falta:** Calcular impuestos para productos con `taxExempt: false` (ej. 19% IVA estándar COP) y desglosarlo en el resumen de compra y en la persistencia del backend (`tax_total`, `vat_rate`, `vat_amount`).
+* **Código:** `useSaleSummary.ts`, `SaleSummary.tsx`, `sale.entity.ts`, `sale-items.entity.ts`, `sales.service.ts`, `saleReceiptPdf.ts`.
+* **Evaluación:** Cumplido al 100%. Motor de liquidación fiscal con cálculo reactivo de Base Gravable, Base Exenta e IVA (19%) en el frontend y backend. Persistencia inmutable en base de datos (`subtotal`, `tax_total`, `vat_rate`, `vat_amount`, `line_total`). Desglose detallado en el resumen de compra, factura en PDF, tarjetas de venta y portal del cliente.
 
 ### V4. Descuento manual sobre el total
 * **Estado:** 🚫 Descartado por control financiero.
