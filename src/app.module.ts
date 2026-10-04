@@ -18,6 +18,7 @@ import { CacheModule } from './modules/cache/cache.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { CustomerPortalModule } from './modules/customer-portal/customer-portal.module';
+import { AuditModule } from './modules/audit/audit.module';
 
 @Module({
 	imports: [
@@ -27,6 +28,7 @@ import { CustomerPortalModule } from './modules/customer-portal/customer-portal.
 		CacheModule,
 		AuthModule,
 		UsersModule,
+		AuditModule,
 		ProductsModule,
 		CompaniesModule,
 		StoresModule,

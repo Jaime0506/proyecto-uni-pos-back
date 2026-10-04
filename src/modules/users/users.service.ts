@@ -12,6 +12,7 @@ import { ChangePasswordDto } from './dtos/change-password.dto';
 import { compareSync } from 'bcrypt';
 import { hashPassword, createUserName } from 'src/utils/auth.utilities';
 import { DeleteDto } from './dtos/delete.dto';
+import { ActivateUserDto } from './dtos/activate-user.dto';
 import { CreateUserWithRoleDto } from './dtos/create-user-with-role.dto';
 import { UpdateUserWithRoleDto } from './dtos/update-user-with-role.dto';
 import { UserRole } from 'src/modules/authorization/entities/user-role.entity';
@@ -21,6 +22,7 @@ import { processTransaction } from 'src/database/transactions';
 import { UserCompanyMembership } from './entities/user-company-membership.entity';
 import { Company } from '../companies/entities/company.entity';
 import { Store } from '../stores/entities/store.entity';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class UserService {
@@ -35,6 +37,7 @@ export class UserService {
 		@InjectRepository(Store)
 		private readonly storeRepository: Repository<Store>,
 		private readonly dataSource: DataSource,
+		private readonly auditService: AuditService,
 	) {}
 
 	async update(userId: string, dto: UpdateDto) {
@@ -83,6 +86,15 @@ export class UserService {
 
 		await this.users.save(user);
 
+		void this.auditService.logAction({
+			userId,
+			module: 'AUTH',
+			action: 'PASSWORD_CHANGED',
+			entityName: 'User',
+			entityId: userId,
+			description: `Contraseña actualizada para el usuario ${user.username}`,
+		});
+
 		return {
 			ok: true,
 			message: 'Contraseña actualizada correctamente',
@@ -126,6 +138,15 @@ export class UserService {
 
 		await this.users.save(userToDelete);
 
+		void this.auditService.logAction({
+			userId: dto.id_user,
+			module: 'USERS',
+			action: 'USER_DEACTIVATED',
+			entityName: 'User',
+			entityId: dto.id_user,
+			description: `Usuario ${userToDelete.username} (${userToDelete.firstName} ${userToDelete.lastName}) desactivado por administrador general`,
+		});
+
 		return {
 			ok: true,
 			message: 'Usuario desactivado correctamente',
@@ -167,9 +188,141 @@ export class UserService {
 
 		await this.users.save(userToDelete);
 
+		void this.auditService.logAction({
+			userId: dto.id_user,
+			companyId: membership.companyId,
+			module: 'USERS',
+			action: 'USER_DEACTIVATED',
+			entityName: 'User',
+			entityId: dto.id_user,
+			description: `Usuario ${userToDelete.username} (${userToDelete.firstName} ${userToDelete.lastName}) desactivado por administrador de empresa`,
+		});
+
 		return {
 			ok: true,
 			message: 'Usuario desactivado correctamente',
+		};
+	}
+
+	async activateUserAdmin(dto: ActivateUserDto) {
+		const user = await this.users.findOne({
+			where: { id: dto.id_user },
+			withDeleted: true,
+		});
+
+		if (!user) throw new BadRequestException('Usuario no encontrado');
+
+		user.deletedAt = null;
+		user.updatedAt = new Date();
+		user.isActive = true;
+
+		await this.users.save(user);
+
+		// Reactivar membresía de compañía si estaba inactiva
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId: dto.id_user },
+			order: { joinedAt: 'DESC' },
+		});
+		if (membership && !membership.isActive) {
+			membership.isActive = true;
+			await this.userCompanyMembershipRepository.save(membership);
+		}
+
+		// Reactivar rol del usuario si estaba desactivado
+		const userRole = await this.userRoleRepository.findOne({
+			where: { userId: dto.id_user },
+			order: { createdAt: 'DESC' },
+			withDeleted: true,
+		});
+		if (userRole && userRole.status !== StatusEnum.ACTIVE) {
+			userRole.status = StatusEnum.ACTIVE;
+			userRole.deletedAt = null;
+			userRole.updatedAt = new Date();
+			await this.userRoleRepository.save(userRole);
+		}
+
+		void this.auditService.logAction({
+			userId: dto.id_user,
+			module: 'USERS',
+			action: 'USER_ACTIVATED',
+			entityName: 'User',
+			entityId: dto.id_user,
+			description: `Usuario ${user.username} (${user.firstName} ${user.lastName}) reactivado por administrador general`,
+		});
+
+		return {
+			ok: true,
+			message: 'Usuario reactivado correctamente',
+			data: { result: user },
+		};
+	}
+
+	async activateStoreUser(dto: ActivateUserDto, requesterId: string) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId: requesterId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		const targetMembership = await this.userCompanyMembershipRepository.findOne(
+			{
+				where: { userId: dto.id_user, companyId: membership.companyId },
+			},
+		);
+
+		if (!targetMembership) {
+			throw new UnauthorizedException(
+				'No tienes permisos para reactivar este usuario o no pertenece a tu compañía',
+			);
+		}
+
+		const user = await this.users.findOne({
+			where: { id: dto.id_user },
+			withDeleted: true,
+		});
+
+		if (!user) throw new BadRequestException('Usuario no encontrado');
+
+		user.deletedAt = null;
+		user.updatedAt = new Date();
+		user.isActive = true;
+
+		await this.users.save(user);
+
+		targetMembership.isActive = true;
+		await this.userCompanyMembershipRepository.save(targetMembership);
+
+		// Reactivar rol del usuario si pertenece a la misma compañía
+		const userRole = await this.userRoleRepository.findOne({
+			where: { userId: dto.id_user, companyId: membership.companyId },
+			order: { createdAt: 'DESC' },
+			withDeleted: true,
+		});
+		if (userRole && userRole.status !== StatusEnum.ACTIVE) {
+			userRole.status = StatusEnum.ACTIVE;
+			userRole.deletedAt = null;
+			userRole.updatedAt = new Date();
+			await this.userRoleRepository.save(userRole);
+		}
+
+		void this.auditService.logAction({
+			userId: dto.id_user,
+			companyId: membership.companyId,
+			module: 'USERS',
+			action: 'USER_ACTIVATED',
+			entityName: 'User',
+			entityId: dto.id_user,
+			description: `Usuario ${user.username} (${user.firstName} ${user.lastName}) reactivado por administrador de empresa`,
+		});
+
+		return {
+			ok: true,
+			message: 'Usuario reactivado correctamente',
+			data: { result: user },
 		};
 	}
 
@@ -441,6 +594,17 @@ export class UserService {
 				},
 			);
 
+			void this.auditService.logAction({
+				userId: result.id,
+				companyId,
+				module: 'USERS',
+				action: 'USER_CREATED',
+				entityName: 'User',
+				entityId: result.id,
+				description: `Usuario ${result.username} (${result.firstName} ${result.lastName}) registrado en el sistema`,
+				details: { roleId, companyId, email: result.email },
+			});
+
 			return {
 				ok: true,
 				message: 'Usuario creado correctamente',
@@ -475,7 +639,7 @@ export class UserService {
 			// Verificar que el usuario existe
 			const user = await this.users.findOne({
 				where: { id: id_user },
-				withDeleted: false,
+				withDeleted: true,
 			});
 
 			if (!user) {
@@ -645,6 +809,17 @@ export class UserService {
 					return updatedUser;
 				},
 			);
+
+			void this.auditService.logAction({
+				userId: id_user,
+				companyId,
+				module: 'USERS',
+				action: 'USER_UPDATED',
+				entityName: 'User',
+				entityId: id_user,
+				description: `Información del usuario ${result.username} (${result.firstName} ${result.lastName}) actualizada`,
+				details: { roleId, companyId },
+			});
 
 			return {
 				ok: true,

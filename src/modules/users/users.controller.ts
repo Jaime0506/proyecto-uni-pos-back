@@ -18,6 +18,7 @@ import { UserService } from './users.service';
 import { UpdateDto } from './dtos/update.dto';
 import { ChangePasswordDto } from './dtos/change-password.dto';
 import { DeleteDto } from './dtos/delete.dto';
+import { ActivateUserDto } from './dtos/activate-user.dto';
 import { CreateUserWithRoleDto } from './dtos/create-user-with-role.dto';
 import { UpdateUserWithRoleDto } from './dtos/update-user-with-role.dto';
 import { RequestUser } from 'src/types/global';
@@ -110,6 +111,17 @@ export class UsersController {
 	}
 
 	@ApiTags('Users - Admin')
+	@Patch('admin/activate-user')
+	@RequirePermissions(['user_admin:update'])
+	@CacheInvalidate({
+		keys: ['users:all'],
+	})
+	@HttpCode(200)
+	async activateUserAdmin(@Body() dto: ActivateUserDto) {
+		return await this.users.activateUserAdmin(dto);
+	}
+
+	@ApiTags('Users - Admin')
 	@Delete('admin/delete-user')
 	@RequirePermissions(['user_admin:delete'])
 	@CacheInvalidate({
@@ -167,6 +179,17 @@ export class UsersController {
 		@Req() req: Request & { user: RequestUser },
 	) {
 		return await this.users.updateStoreUserWithRole(dto, req.user.userId);
+	}
+
+	@ApiTags('Users - Store Admin')
+	@Patch('store/activate-user')
+	@RequirePermissions(['user:update'])
+	@HttpCode(200)
+	async activateStoreUser(
+		@Body() dto: ActivateUserDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.activateStoreUser(dto, req.user.userId);
 	}
 
 	@ApiTags('Users - Store Admin')
