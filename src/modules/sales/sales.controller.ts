@@ -12,6 +12,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
 import { GetAllSalesDto } from './dto/get-all-sales-dto';
+import { CreateSaleDto } from './dto/create-sale.dto';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 
 @ApiTags('Sales')
@@ -64,7 +65,7 @@ export class SalesController {
 
 	@Post('create')
 	async createSale(
-		@Body() createSaleDto: any,
+		@Body() createSaleDto: CreateSaleDto,
 		@Request() req: { user: { userId: string } },
 	) {
 		const userId = req.user.userId;

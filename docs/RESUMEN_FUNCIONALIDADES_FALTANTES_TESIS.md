@@ -13,7 +13,7 @@ Este documento consolida el estado global de cumplimiento, requerimientos implem
 | Módulo de Tesis | Requerimientos Totales | Completados | Descartados (Justificados) | Pendientes / En Progreso | Estado Global |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Módulo 1: Ingreso Seguro** | 5 (B1 a B5) | 4 (80%) | 1 (20% - B2) | 0 (0%) | **100% Culminado** |
-| **Módulo 2: Gestión de Ventas** | 11 (V1 a V11) | 7 (63.6%) | 1 (9.1% - V4) | 3 (27.3% - V3, V5, V8) | **En Proceso de Cierre** |
+| **Módulo 2: Gestión de Ventas** | 11 (V1 a V11) | 8 (72.7%) | 1 (9.1% - V4) | 2 (18.2% - V3, V8) | **En Proceso de Cierre** |
 
 ---
 
@@ -27,7 +27,7 @@ Este documento consolida el estado global de cumplimiento, requerimientos implem
 | **V2** | Seleccionar múltiples productos para una misma venta | ✅ **Completado** | **100%** | Selector multi-artículo [ProductSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/ProductSelector.tsx), hook [useProductSelection.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/hooks/useProductSelection.ts) e inserción en lote en [sale-items.entity.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/entities/sale-items.entity.ts). |
 | **V3** | Calcular automáticamente subtotal, impuestos y total | ⚠️ **Parcial** | **40%** | Calcula subtotal y total en [useSaleSummary.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/hooks/useSaleSummary.ts). **Pendiente:** cálculo de IVA (19% o exento según `product.taxExempt`) y desglose en interfaz y backend (`tax_total`, `vat_rate`, `vat_amount`). |
 | **V4** | Aplicar descuentos manuales sobre el total de la venta | 🚫 **Descartado** | **N/A** | **Justificación formal de control financiero:** Se previene el fraude y descuadre de caja por descuentos discrecionales del cajero. Los descuentos se gobiernan mediante el motor auditado de Campañas y Bonificaciones (`reward_rules`). |
-| **V5** | Seleccionar método de pago (efectivo, transferencia, QR, etc.) | ❌ **Pendiente** | **0%** | Sin columna `payment_method` en la base de datos, sin selector de pago en la UI ni cálculo de cambio/efectivo. |
+| **V5** | Seleccionar método de pago (efectivo, transferencia, QR, etc.) | ✅ **Completado** | **100%** | Columna `payment_method` en base de datos PostgreSQL, DTO validado en NestJS (`CreateSaleDto`), selector interactivo [PaymentMethodSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/PaymentMethodSelector.tsx) con soporte para Efectivo (cálculo de cambio en vivo y botones de billetes rápidos de $10k, $20k, $50k, $100k y exacto), Transferencia, QR Móvil (Nequi/Daviplata) y Tarjeta, persistencia en checkout y badges visuales distintivos en el historial de ventas [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx). |
 | **V6** | Asociar venta a cliente registrado o venta anónima | ✅ **Completado** | **100%** | Búsqueda por cédula con debounce y creación rápida inline en [CustomerSelector.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/CustomerSelector.tsx). Si no se selecciona cliente, se graba `customer_id: null` y se identifica formalmente como *"Consumidor Final"*. |
 | **V7** | Descontar automáticamente del inventario los productos vendidos | ✅ **Completado** | **100%** | Validación reactiva contra `stock` en cliente y deducción atómica en base de datos en [sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts#L213-L223) mediante `processTransaction`. |
 | **V8** | Generar comprobante digital de venta descargable en PDF | ❌ **Pendiente** | **0%** | Falta utilidad de renderizado y descarga de comprobante en PDF (con formato ticket y carta) post-venta y desde el historial. |
@@ -39,21 +39,9 @@ Este documento consolida el estado global de cumplimiento, requerimientos implem
 
 ### 2.2 Inventario Detallado de Funcionalidades Pendientes (Próximos Pasos)
 
-A continuación se detalla el alcance técnico exacto de las **3 funcionalidades pendientes** del Módulo de Ventas:
+A continuación se detalla el alcance técnico exacto de las **2 funcionalidades pendientes** del Módulo de Ventas:
 
-#### 1. Requerimiento V5: Selección y Persistencia del Método de Pago
-* **Objetivo:** Permitir al cajero seleccionar cómo cancela el cliente la venta y gestionar el arqueo transaccional.
-* **Tareas Técnicas:**
-  * **Backend:**
-    - Agregar columna `payment_method` (`varchar(50)`, default `'cash'`) en [sale.entity.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/entities/sale.entity.ts). Opciones válidas: `cash` (Efectivo), `transfer` (Transferencia), `qr` (QR / Nequi / Daviplata), `card` (Tarjeta).
-    - Actualizar DTOs y el método `createSale` en [sales.service.ts](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/sales/sales.service.ts) para guardar el método de pago seleccionado.
-    - Proyectar `s.payment_method AS sale_payment_method` en `getAllSales`.
-  * **Frontend:**
-    - En [SaleSummary.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SaleSummary.tsx), agregar selector visual con iconos para el medio de pago.
-    - Si se selecciona *Efectivo*, incluir campo de "Monto recibido" y cálculo dinámico de "Cambio / Vueltos".
-    - Mostrar el badge de método de pago en cada tarjeta de [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx).
-
-#### 2. Requerimiento V8: Comprobante Digital de Venta Descargable en PDF
+#### 1. Requerimiento V8: Comprobante Digital de Venta Descargable en PDF
 * **Objetivo:** Generar y permitir descargar inmediatamente el comprobante o factura digital en PDF al culminar la venta o bajo demanda desde el historial.
 * **Tareas Técnicas:**
   * **Frontend:**
@@ -62,7 +50,7 @@ A continuación se detalla el alcance técnico exacto de las **3 funcionalidades
     - Agregar diálogo modal post-venta *"¡Venta exitosa!"* con botón directo *"Descargar Factura PDF"*.
     - Agregar botón de descarga directa de PDF con icono de descarga en cada tarjeta de [SalesCardsGrid.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/components/sales/SalesCardsGrid.tsx).
 
-#### 3. Requerimiento V3 (Completitud): Cálculo y Desglose Automático de Impuestos (IVA)
+#### 2. Requerimiento V3 (Completitud): Cálculo y Desglose Automático de Impuestos (IVA)
 * **Objetivo:** Calcular automáticamente el IVA correspondiente a los productos gravados frente a los exentos (`product.taxExempt`).
 * **Tareas Técnicas:**
   * **Frontend:**

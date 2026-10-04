@@ -13,6 +13,7 @@ import { Bonus } from './entities/bonuses.entity';
 import { Product } from '../products/entities/product.entity';
 import { processTransaction } from 'src/database/transactions';
 import { CreateCustomerDto } from './dto/create-customer.dto';
+import { CreateSaleDto } from './dto/create-sale.dto';
 
 @Injectable()
 export class SalesService {
@@ -85,6 +86,7 @@ export class SalesService {
 				's.total AS sale_total',
 				's.discount_total AS discount_total',
 				's.status AS sale_status',
+				's.payment_method AS sale_payment_method',
 				's.created_at AS sale_created_at',
 				'c.id AS customer_id',
 				'c.national_id AS customer_national_id',
@@ -114,6 +116,7 @@ export class SalesService {
 					id: row.sale_id,
 					total: row.sale_total,
 					status: row.sale_status,
+					paymentMethod: row.sale_payment_method || 'cash',
 					createdAt: row.sale_created_at,
 					customer: {
 						id: row.customer_id,
@@ -211,7 +214,7 @@ export class SalesService {
 		return this.customerRepository.save(customer);
 	}
 
-	async createSale(createSaleDto: any, userId: string) {
+	async createSale(createSaleDto: CreateSaleDto, userId: string) {
 		console.log('createSaleDto:', createSaleDto);
 		return processTransaction(this.dataSource, async (queryRunner) => {
 			const claimBonus = createSaleDto.claimBonus || false;
@@ -224,26 +227,27 @@ export class SalesService {
 				company_id: createSaleDto.companyId,
 				store_id: createSaleDto.storeId,
 				user_id: userId,
-				customer_id: createSaleDto.customerId,
-				campaign_id: createSaleDto.campaignId ?? null,
+				customer_id: createSaleDto.customerId ?? undefined,
+				campaign_id: createSaleDto.campaignId ?? undefined,
 				subtotal: subtotal,
 				discount_total: discount,
 				total: totalFinal,
 				claim_bonus: claimBonus,
-				status: 'pending',
+				payment_method: createSaleDto.payment_method || 'cash',
+				status: 'completed',
 				channel: 'in_store',
 			});
 
 			const savedSale = await queryRunner.manager.save(Sale, sale);
 
-			const saleItems = createSaleDto.products.map((p: any) => ({
+			const saleItems = createSaleDto.products.map((p) => ({
 				sale_id: savedSale.id,
 				product_id: p.id,
 				quantity: p.quantity,
 				unit_price: Number(p.unit_price),
 				line_total: Number(p.line_total),
 				discount: 0,
-				vat_rate: null,
+				vat_rate: undefined,
 				vat_amount: 0,
 			}));
 

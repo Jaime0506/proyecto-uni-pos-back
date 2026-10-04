@@ -35,6 +35,9 @@ export class Sale {
 	@Column({ type: 'varchar', length: 10, default: 'pending' })
 	status!: string;
 
+	@Column({ type: 'varchar', length: 50, default: 'cash', name: 'payment_method' })
+	payment_method!: string;
+
 	@Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
 	subtotal!: number;
 
