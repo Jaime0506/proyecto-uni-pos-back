@@ -25,7 +25,13 @@ import { RequestUser } from 'src/types/global';
 import {
 	PermissionGuard,
 	RequirePermissions,
+	StoreAccessGuard,
 } from '../auth/authorization-guard';
+import {
+	CreateStoreEmployeeDto,
+	UpdateStoreEmployeeDto,
+	StoreUserActionDto,
+} from './dtos/by-store-user.dto';
 import { Cache } from '../cache/decorators/cache.decorator';
 import { CacheInvalidate } from '../cache/decorators/cache-invalidate.decorator';
 
@@ -201,5 +207,66 @@ export class UsersController {
 		@Req() req: Request & { user: RequestUser },
 	) {
 		return await this.users.deleteStoreUser(dto, req.user.userId);
+	}
+
+	// ========== Sección: Users - Gestión de Empleados por Tienda ==========
+	@ApiTags('Users - Store Employees')
+	@Get('by-store/get-all/:storeId')
+	@UseGuards(StoreAccessGuard)
+	@RequirePermissions(['store_user:read'])
+	@HttpCode(200)
+	async getUsersByStore(
+		@Param('storeId') storeId: string,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.getUsersByStore(Number(storeId), req.user.userId);
+	}
+
+	@ApiTags('Users - Store Employees')
+	@Post('by-store/create-user')
+	@UseGuards(StoreAccessGuard)
+	@RequirePermissions(['store_user:create'])
+	@HttpCode(200)
+	async createStoreEmployee(
+		@Body() dto: CreateStoreEmployeeDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.createStoreEmployee(dto, req.user.userId);
+	}
+
+	@ApiTags('Users - Store Employees')
+	@Patch('by-store/update-user')
+	@UseGuards(StoreAccessGuard)
+	@RequirePermissions(['store_user:update'])
+	@HttpCode(200)
+	async updateStoreEmployee(
+		@Body() dto: UpdateStoreEmployeeDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.updateStoreEmployee(dto, req.user.userId);
+	}
+
+	@ApiTags('Users - Store Employees')
+	@Patch('by-store/activate-user')
+	@UseGuards(StoreAccessGuard)
+	@RequirePermissions(['store_user:update'])
+	@HttpCode(200)
+	async activateStoreEmployee(
+		@Body() dto: StoreUserActionDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.activateStoreEmployee(dto, req.user.userId);
+	}
+
+	@ApiTags('Users - Store Employees')
+	@Delete('by-store/deactivate-user')
+	@UseGuards(StoreAccessGuard)
+	@RequirePermissions(['store_user:delete'])
+	@HttpCode(200)
+	async deactivateStoreEmployee(
+		@Body() dto: StoreUserActionDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.deactivateStoreEmployee(dto, req.user.userId);
 	}
 }

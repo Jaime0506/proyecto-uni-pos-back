@@ -19,11 +19,33 @@ import {
 	RequirePermissions,
 } from '../auth/authorization-guard';
 
+import { Request } from 'express';
+import { RequestUser } from 'src/types/global';
+import { Req } from '@nestjs/common';
+
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 @Controller('stores')
 export class StoresController {
 	constructor(private readonly storesService: StoresService) {}
+
+	// Obtener tiendas de la compañía del usuario autenticado (activas)
+	@Get('company/get-all')
+	@UseGuards(PermissionGuard)
+	@RequirePermissions({
+		anyOf: [
+			'store:read',
+			'user:create',
+			'user:update',
+			'user:read',
+			'store_user:read',
+			'store_user:create',
+		],
+	})
+	@HttpCode(200)
+	async getCompanyStores(@Req() req: Request & { user: RequestUser }) {
+		return await this.storesService.getCompanyStores(req.user.userId);
+	}
 
 	// Obtener todas las tiendas (incluyendo desactivadas)
 	@Get('get-all')

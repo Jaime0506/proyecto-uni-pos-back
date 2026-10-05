@@ -36,7 +36,9 @@ export class CacheInvalidateInterceptor implements NestInterceptor {
 		}
 
 		const request = context.switchToHttp().getRequest<Request>();
-		const user = request.user as { userId?: string; id?: string } | undefined;
+		const user = request.user as
+			| { userId?: string; id?: string }
+			| undefined;
 		const userId = user?.userId || user?.id;
 
 		const dynamicKeys: string[] = [];

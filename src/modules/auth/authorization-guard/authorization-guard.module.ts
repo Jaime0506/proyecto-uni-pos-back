@@ -7,13 +7,21 @@ import { MyPermissionResolverService } from './my-permission-resolver.service';
 import { UserRole } from 'src/modules/authorization/entities/user-role.entity';
 import { RolePermission } from 'src/modules/authorization/entities/role-permission.entity';
 
+import { StoreAccessGuard } from '../guards/store-access.guard';
+
 @Module({
 	imports: [TypeOrmModule.forFeature([UserRole, RolePermission])],
 	providers: [
 		{ provide: PERMISSION_RESOLVER, useClass: MyPermissionResolverService },
 		PermissionGuard,
+		StoreAccessGuard,
 		MyPermissionResolverService, // Exportar directamente también
 	],
-	exports: [PermissionGuard, PERMISSION_RESOLVER, MyPermissionResolverService],
+	exports: [
+		PermissionGuard,
+		StoreAccessGuard,
+		PERMISSION_RESOLVER,
+		MyPermissionResolverService,
+	],
 })
 export class AuthorizationGuardModule {}

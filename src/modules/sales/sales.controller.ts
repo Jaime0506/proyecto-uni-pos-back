@@ -7,7 +7,11 @@ import {
 	Request,
 	UseGuards,
 } from '@nestjs/common';
-import { PermissionGuard, RequirePermissions } from '../auth/authorization-guard';
+import {
+	PermissionGuard,
+	RequirePermissions,
+	StoreAccessGuard,
+} from '../auth/authorization-guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { SalesService } from './sales.service';
@@ -18,7 +22,7 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 @ApiTags('Sales')
 @ApiBearerAuth()
 @Controller('sales')
-@UseGuards(JwtAuthGuard, PermissionGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard, StoreAccessGuard)
 export class SalesController {
 	constructor(private readonly salesService: SalesService) {}
 

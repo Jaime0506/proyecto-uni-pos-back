@@ -12,6 +12,8 @@ import { UpdateStoreDto } from './dtos/update-store.dto';
 import { DeleteStoreDto } from './dtos/delete-store.dto';
 import { StatusEnum } from 'src/core/status.enum';
 
+import { UserCompanyMembership } from '../users/entities/user-company-membership.entity';
+
 @Injectable()
 export class StoresService {
 	constructor(
@@ -19,7 +21,45 @@ export class StoresService {
 		private readonly storeRepository: Repository<Store>,
 		@InjectRepository(Company)
 		private readonly companyRepository: Repository<Company>,
+		@InjectRepository(UserCompanyMembership)
+		private readonly userCompanyMembershipRepository: Repository<UserCompanyMembership>,
 	) {}
+
+	// Obtener tiendas de la compañía del usuario autenticado (activas)
+	async getCompanyStores(userId: string) {
+		try {
+			const membership = await this.userCompanyMembershipRepository.findOne({
+				where: { userId, isActive: true },
+			});
+
+			if (!membership) {
+				return {
+					ok: true,
+					message: 'El usuario no tiene una compañía asignada',
+					data: { result: [] },
+				};
+			}
+
+			const stores = await this.storeRepository.find({
+				where: {
+					company: { id: membership.companyId },
+					status: StatusEnum.ACTIVE,
+				},
+				withDeleted: false,
+			});
+
+			return {
+				ok: true,
+				message: 'Tiendas de la compañía obtenidas correctamente',
+				data: { result: stores },
+			};
+		} catch (error) {
+			console.error(error);
+			throw new InternalServerErrorException(
+				'Error al obtener las tiendas de la compañía',
+			);
+		}
+	}
 
 	// Obtener todas las tiendas (incluyendo desactivadas)
 	async getAllStores() {
@@ -43,7 +83,7 @@ export class StoresService {
 	// Crear una nueva tienda
 	async createStore(dto: CreateStoreDto) {
 		try {
-			const { companyId, name, address, phone, email } = dto;
+			const { companyId, name, nit, address, phone, email } = dto;
 
 			// Verificar si la compañía existe
 			const company = await this.companyRepository.findOne({
@@ -76,6 +116,7 @@ export class StoresService {
 			const newStore = new Store();
 			newStore.company = company;
 			newStore.name = name;
+			if (nit !== undefined) newStore.nit = nit?.trim() ? nit.trim() : null;
 			if (address !== undefined) newStore.address = address;
 			if (phone !== undefined) newStore.phone = phone;
 			if (email !== undefined) newStore.email = email;
@@ -99,7 +140,7 @@ export class StoresService {
 	// Actualizar una tienda
 	async updateStore(dto: UpdateStoreDto) {
 		try {
-			const { id, companyId, name, address, phone, email, status } = dto;
+			const { id, companyId, name, nit, address, phone, email, status } = dto;
 
 			// Verificar si la tienda existe
 			const existingStore = await this.storeRepository.findOne({
@@ -148,6 +189,8 @@ export class StoresService {
 
 			// Actualizar campos
 			if (name !== undefined) existingStore.name = name;
+			if (nit !== undefined)
+				existingStore.nit = nit?.trim() ? nit.trim() : null;
 			if (address !== undefined) existingStore.address = address;
 			if (phone !== undefined) existingStore.phone = phone;
 			if (email !== undefined) existingStore.email = email;

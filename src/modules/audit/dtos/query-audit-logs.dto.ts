@@ -23,7 +23,9 @@ export class QueryAuditLogsDto {
 	@IsString()
 	userId?: string;
 
-	@ApiPropertyOptional({ description: 'Filtrar por módulo (USERS, AUTH, etc.)' })
+	@ApiPropertyOptional({
+		description: 'Filtrar por módulo (USERS, AUTH, etc.)',
+	})
 	@IsOptional()
 	@IsString()
 	module?: string;
@@ -33,7 +35,9 @@ export class QueryAuditLogsDto {
 	@IsString()
 	action?: string;
 
-	@ApiPropertyOptional({ description: 'Búsqueda por texto en descripción o usuario' })
+	@ApiPropertyOptional({
+		description: 'Búsqueda por texto en descripción o usuario',
+	})
 	@IsOptional()
 	@IsString()
 	search?: string;

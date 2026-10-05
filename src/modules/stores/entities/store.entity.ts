@@ -9,7 +9,6 @@ import {
 	UpdateDateColumn,
 	DeleteDateColumn,
 	JoinColumn,
-	Index,
 	Unique,
 } from 'typeorm';
 
@@ -31,6 +30,9 @@ export class Store {
 
 	@Column({ type: 'varchar', length: 50, nullable: true })
 	code?: string;
+
+	@Column({ type: 'varchar', length: 50, nullable: true })
+	nit?: string | null;
 
 	@Column({ type: 'text', nullable: true })
 	address: string;

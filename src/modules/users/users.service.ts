@@ -3,6 +3,7 @@ import {
 	InternalServerErrorException,
 	UnauthorizedException,
 	BadRequestException,
+	NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/core/users/user.entity';
@@ -22,7 +23,15 @@ import { processTransaction } from 'src/database/transactions';
 import { UserCompanyMembership } from './entities/user-company-membership.entity';
 import { Company } from '../companies/entities/company.entity';
 import { Store } from '../stores/entities/store.entity';
+import { UserStore } from './entities/user-store.entity';
+import { RolePermission } from '../authorization/entities/role-permission.entity';
 import { AuditService } from '../audit/audit.service';
+import { IsNull } from 'typeorm';
+import {
+	CreateStoreEmployeeDto,
+	UpdateStoreEmployeeDto,
+	StoreUserActionDto,
+} from './dtos/by-store-user.dto';
 
 @Injectable()
 export class UserService {
@@ -36,6 +45,8 @@ export class UserService {
 		private readonly companyRepository: Repository<Company>,
 		@InjectRepository(Store)
 		private readonly storeRepository: Repository<Store>,
+		@InjectRepository(UserStore)
+		private readonly userStoreRepository: Repository<UserStore>,
 		private readonly dataSource: DataSource,
 		private readonly auditService: AuditService,
 	) {}
@@ -386,7 +397,33 @@ export class UserService {
 			}
 		});
 
-		// Formatear los resultados para incluir la propiedad role y company
+		// Obtener asignaciones de tiendas para los usuarios
+		const userIds = users.map((u) => u.id);
+		const userStores =
+			userIds.length > 0
+				? await this.userStoreRepository.find({
+						where: userIds.map((id) => ({ userId: id })),
+						relations: ['store'],
+					})
+				: [];
+
+		const userStoresMap = new Map<
+			string,
+			{ id: number; name: string; isActive: boolean }[]
+		>();
+		userStores.forEach((us) => {
+			if (us.store) {
+				const list = userStoresMap.get(us.userId) || [];
+				list.push({
+					id: us.store.id,
+					name: us.store.name,
+					isActive: us.isActive,
+				});
+				userStoresMap.set(us.userId, list);
+			}
+		});
+
+		// Formatear los resultados para incluir la propiedad role, company y stores
 		const usersWithRoles = users.map((user) => {
 			const role = userRoleMap.get(user.id);
 			const company = userCompanyMap.get(user.id);
@@ -406,6 +443,7 @@ export class UserService {
 							name: company.name,
 						}
 					: null,
+				stores: userStoresMap.get(user.id) || [],
 			};
 
 			return userWithRole;
@@ -427,6 +465,76 @@ export class UserService {
 			message: 'Usuario obtenido correctamente',
 			data: { result: user },
 		};
+	}
+
+	// Helper: Determina si el usuario tiene permiso store:access_all o rol de administración
+	async userHasStoreAccessAll(
+		userId: string,
+		companyId?: number,
+	): Promise<boolean> {
+		const user = await this.users.findOne({ where: { id: userId } });
+		if (user?.isSuperRoot) return true;
+
+		const userRole = await this.userRoleRepository.findOne({
+			where: {
+				userId,
+				status: StatusEnum.ACTIVE,
+				deletedAt: IsNull(),
+				...(companyId ? { companyId } : {}),
+			},
+			relations: ['role'],
+			order: { createdAt: 'DESC' },
+		});
+
+		if (!userRole || !userRole.role) return false;
+
+		// Si el nombre del rol es administrador o super, tiene acceso global
+		const roleNameLower = userRole.role.name.toLowerCase();
+		if (roleNameLower.includes('admin') || roleNameLower.includes('super')) {
+			return true;
+		}
+
+		// Verificar si tiene el permiso store:access_all
+		const hasAll = await this.dataSource.getRepository(RolePermission).findOne({
+			where: {
+				roleId: userRole.role.id,
+				status: StatusEnum.ACTIVE,
+				deletedAt: IsNull(),
+				permission: { name: 'store:access_all', status: StatusEnum.ACTIVE },
+			},
+			relations: ['permission'],
+		});
+
+		return !!hasAll;
+	}
+
+	// Helper: Determina si el usuario tiene acceso a una tienda específica
+	async userHasAccessToStore(
+		userId: string,
+		storeId: number,
+	): Promise<boolean> {
+		const user = await this.users.findOne({ where: { id: userId } });
+		if (user?.isSuperRoot) return true;
+
+		const store = await this.storeRepository.findOne({
+			where: { id: storeId, status: StatusEnum.ACTIVE },
+			withDeleted: false,
+		});
+		if (!store) return false;
+
+		const hasAll = await this.userHasStoreAccessAll(userId, store.companyId);
+		if (hasAll) return true;
+
+		const userStore = await this.userStoreRepository.findOne({
+			where: {
+				userId,
+				storeId,
+				companyId: store.companyId,
+				isActive: true,
+			},
+		});
+
+		return !!userStore;
 	}
 
 	async getUserCompanyAndStores(userId: string) {
@@ -453,14 +561,35 @@ export class UserService {
 
 			const company = membership.company;
 
-			// Buscar las tiendas activas de la compañía
-			const stores = await this.storeRepository.find({
-				where: {
-					company: { id: company.id },
-					status: StatusEnum.ACTIVE,
-				},
-				withDeleted: false,
-			});
+			// Verificar si tiene acceso total a tiendas o solo a las asignadas
+			const hasAccessAll = await this.userHasStoreAccessAll(userId, company.id);
+
+			let stores: Store[] = [];
+			if (hasAccessAll) {
+				stores = await this.storeRepository.find({
+					where: {
+						company: { id: company.id },
+						status: StatusEnum.ACTIVE,
+					},
+					withDeleted: false,
+				});
+			} else {
+				const userStores = await this.userStoreRepository.find({
+					where: {
+						userId,
+						companyId: company.id,
+						isActive: true,
+					},
+					relations: ['store'],
+				});
+
+				stores = userStores
+					.map((us) => us.store)
+					.filter(
+						(st) =>
+							st && st.status === StatusEnum.ACTIVE && st.deletedAt === null,
+					);
+			}
 
 			// Formatear la respuesta con solo id y nombre
 			const result = {
@@ -498,6 +627,7 @@ export class UserService {
 				phoneNumber,
 				roleId,
 				companyId,
+				storeIds,
 			} = dto;
 
 			// Verificar si el usuario ya existe
@@ -541,6 +671,25 @@ export class UserService {
 					throw new BadRequestException(
 						`La compañía con ID ${companyId} no existe o está desactivada`,
 					);
+				}
+			}
+
+			// Validar que las tiendas existan y pertenezcan a la compañía
+			if (storeIds && storeIds.length > 0 && companyId !== undefined) {
+				const stores = await this.storeRepository.find({
+					where: {
+						company: { id: companyId },
+						status: StatusEnum.ACTIVE,
+					},
+					withDeleted: false,
+				});
+				const validStoreIds = new Set(stores.map((s) => s.id));
+				for (const sId of storeIds) {
+					if (!validStoreIds.has(sId)) {
+						throw new BadRequestException(
+							`La tienda ${sId} no pertenece a la compañía o está inactiva`,
+						);
+					}
 				}
 			}
 
@@ -590,6 +739,19 @@ export class UserService {
 						await queryRunner.manager.save(UserCompanyMembership, membership);
 					}
 
+					// Si se proporcionan tiendas asignadas, guardarlas en UserStore
+					if (storeIds && storeIds.length > 0 && companyId !== undefined) {
+						const userStoreEntities = storeIds.map((sId) =>
+							queryRunner.manager.create(UserStore, {
+								userId: savedUser.id,
+								storeId: sId,
+								companyId,
+								isActive: true,
+							}),
+						);
+						await queryRunner.manager.save(UserStore, userStoreEntities);
+					}
+
 					return savedUser;
 				},
 			);
@@ -602,7 +764,7 @@ export class UserService {
 				entityName: 'User',
 				entityId: result.id,
 				description: `Usuario ${result.username} (${result.firstName} ${result.lastName}) registrado en el sistema`,
-				details: { roleId, companyId, email: result.email },
+				details: { roleId, companyId, storeIds, email: result.email },
 			});
 
 			return {
@@ -634,6 +796,7 @@ export class UserService {
 				phoneNumber,
 				roleId,
 				companyId,
+				storeIds,
 			} = dto;
 
 			// Verificar que el usuario existe
@@ -644,6 +807,30 @@ export class UserService {
 
 			if (!user) {
 				throw new BadRequestException('El usuario no existe');
+			}
+
+			// Validar unicidad de email si cambió
+			if (email && email !== user.email) {
+				const existingEmail = await this.users.findOne({
+					where: { email },
+					withDeleted: true,
+				});
+				if (existingEmail && existingEmail.id !== id_user) {
+					throw new BadRequestException('El correo electrónico ya está en uso');
+				}
+			}
+
+			// Validar unicidad de cédula si cambió
+			if (nationalId && nationalId !== user.nationalId) {
+				const existingNationalId = await this.users.findOne({
+					where: { nationalId },
+					withDeleted: true,
+				});
+				if (existingNationalId && existingNationalId.id !== id_user) {
+					throw new BadRequestException(
+						'El número de identificación ya está en uso',
+					);
+				}
 			}
 
 			// Si se proporciona un roleId, verificar que el rol exista y esté activo
@@ -674,6 +861,35 @@ export class UserService {
 					throw new BadRequestException(
 						`La compañía con ID ${companyId} no existe o está desactivada`,
 					);
+				}
+			}
+
+			// Resolver compañía objetivo para tiendas
+			let targetCompanyId = companyId;
+			if (!targetCompanyId) {
+				const currentMembership =
+					await this.userCompanyMembershipRepository.findOne({
+						where: { userId: id_user, isActive: true },
+					});
+				targetCompanyId = currentMembership?.companyId;
+			}
+
+			// Validar tiendas asignadas
+			if (storeIds && storeIds.length > 0 && targetCompanyId !== undefined) {
+				const stores = await this.storeRepository.find({
+					where: {
+						company: { id: targetCompanyId },
+						status: StatusEnum.ACTIVE,
+					},
+					withDeleted: false,
+				});
+				const validStoreIds = new Set(stores.map((s) => s.id));
+				for (const sId of storeIds) {
+					if (!validStoreIds.has(sId)) {
+						throw new BadRequestException(
+							`La tienda ${sId} no pertenece a la compañía o está inactiva`,
+						);
+					}
 				}
 			}
 
@@ -806,19 +1022,60 @@ export class UserService {
 						}
 					}
 
+					// Sincronizar tiendas asignadas si se proporcionó storeIds
+					if (storeIds !== undefined && targetCompanyId) {
+						const currentAssignments = await queryRunner.manager.find(
+							UserStore,
+							{ where: { userId: id_user } },
+						);
+						const targetSet = new Set(storeIds);
+
+						// Desactivar las que no están en targetSet
+						for (const assignment of currentAssignments) {
+							if (!targetSet.has(assignment.storeId) && assignment.isActive) {
+								assignment.isActive = false;
+								assignment.updatedAt = new Date();
+								await queryRunner.manager.save(UserStore, assignment);
+							}
+						}
+
+						// Crear o reactivar las que están en targetSet
+						for (const sId of storeIds) {
+							const existing = currentAssignments.find(
+								(a) => a.storeId === sId,
+							);
+							if (existing) {
+								if (!existing.isActive) {
+									existing.isActive = true;
+									existing.companyId = targetCompanyId;
+									existing.updatedAt = new Date();
+									await queryRunner.manager.save(UserStore, existing);
+								}
+							} else {
+								const newAssignment = queryRunner.manager.create(UserStore, {
+									userId: id_user,
+									storeId: sId,
+									companyId: targetCompanyId,
+									isActive: true,
+								});
+								await queryRunner.manager.save(UserStore, newAssignment);
+							}
+						}
+					}
+
 					return updatedUser;
 				},
 			);
 
 			void this.auditService.logAction({
 				userId: id_user,
-				companyId,
+				companyId: targetCompanyId,
 				module: 'USERS',
 				action: 'USER_UPDATED',
 				entityName: 'User',
 				entityId: id_user,
 				description: `Información del usuario ${result.username} (${result.firstName} ${result.lastName}) actualizada`,
-				details: { roleId, companyId },
+				details: { roleId, companyId: targetCompanyId, storeIds },
 			});
 
 			return {
@@ -903,6 +1160,28 @@ export class UserService {
 			}
 		});
 
+		// Obtener asignaciones de tiendas para los usuarios de la compañía
+		const userStores = await this.userStoreRepository.find({
+			where: userIds.map((id) => ({ userId: id })),
+			relations: ['store'],
+		});
+
+		const userStoresMap = new Map<
+			string,
+			{ id: number; name: string; isActive: boolean }[]
+		>();
+		userStores.forEach((us) => {
+			if (us.store) {
+				const list = userStoresMap.get(us.userId) || [];
+				list.push({
+					id: us.store.id,
+					name: us.store.name,
+					isActive: us.isActive,
+				});
+				userStoresMap.set(us.userId, list);
+			}
+		});
+
 		// 5. Formatear
 		const company = userMemberships[0].company; // Todos comparten la misma compañía
 		const usersWithRoles = users.map((user) => {
@@ -922,6 +1201,7 @@ export class UserService {
 							name: company.name,
 						}
 					: null,
+				stores: userStoresMap.get(user.id) || [],
 			};
 		});
 
@@ -1051,5 +1331,298 @@ export class UserService {
 		}
 
 		return this.updateUserWithRole(dto);
+	}
+
+	// ========== Sección: Gestión de Empleados por Tienda ==========
+
+	async getUsersByStore(storeId: number, requesterUserId: string) {
+		const store = await this.storeRepository.findOne({
+			where: { id: storeId, status: StatusEnum.ACTIVE },
+		});
+		if (!store) {
+			throw new NotFoundException(
+				'La tienda especificada no existe o no está activa',
+			);
+		}
+
+		const hasAccess = await this.userHasAccessToStore(requesterUserId, storeId);
+		if (!hasAccess) {
+			throw new UnauthorizedException(
+				'No tienes permisos para consultar los empleados de esta tienda',
+			);
+		}
+
+		// Obtener las asignaciones a la tienda
+		const userStores = await this.userStoreRepository.find({
+			where: { storeId },
+			relations: ['store'],
+			order: { createdAt: 'DESC' },
+		});
+
+		if (userStores.length === 0) {
+			return {
+				ok: true,
+				message: 'Empleados de la tienda obtenidos correctamente',
+				data: { result: [] },
+			};
+		}
+
+		const userIds = userStores.map((us) => us.userId);
+
+		// Obtener usuarios
+		const users = await this.users.find({
+			where: userIds.map((id) => ({ id })),
+			select: [
+				'id',
+				'username',
+				'email',
+				'nationalId',
+				'isActive',
+				'phoneNumber',
+				'firstName',
+				'lastName',
+				'createdAt',
+				'updatedAt',
+				'deletedAt',
+			],
+			withDeleted: true,
+		});
+
+		// Obtener roles de los usuarios en la compañía de la tienda
+		const userRoles = await this.userRoleRepository.find({
+			where: userIds.map((id) => ({
+				userId: id,
+				companyId: store.companyId,
+				status: StatusEnum.ACTIVE,
+			})),
+			relations: ['role'],
+			order: { createdAt: 'DESC' },
+		});
+
+		const userRoleMap = new Map<string, Role>();
+		userRoles.forEach((ur) => {
+			if (!userRoleMap.has(ur.userId) && ur.role) {
+				userRoleMap.set(ur.userId, ur.role);
+			}
+		});
+
+		const userMap = new Map<string, User>();
+		users.forEach((u) => userMap.set(u.id, u));
+
+		const result = userStores
+			.map((us) => {
+				const u = userMap.get(us.userId);
+				if (!u) return null;
+				const role = userRoleMap.get(us.userId);
+				return {
+					...u,
+					id: us.userId,
+					role: role
+						? {
+								id: role.id,
+								companyId: role.companyId,
+								name: role.name,
+							}
+						: null,
+					store: {
+						id: us.store.id,
+						name: us.store.name,
+					},
+					isActive: us.isActive,
+					isStoreActive: us.isActive,
+					isGlobalActive: u.isActive,
+					assignedAt: us.createdAt,
+				};
+			})
+			.filter((item) => item !== null);
+
+		return {
+			ok: true,
+			message: 'Empleados de la tienda obtenidos correctamente',
+			data: { result },
+		};
+	}
+
+	async createStoreEmployee(
+		dto: CreateStoreEmployeeDto,
+		requesterUserId: string,
+	) {
+		const store = await this.storeRepository.findOne({
+			where: { id: dto.storeId, status: StatusEnum.ACTIVE },
+		});
+		if (!store) {
+			throw new NotFoundException(
+				'La tienda especificada no existe o no está activa',
+			);
+		}
+
+		const hasAccess = await this.userHasAccessToStore(
+			requesterUserId,
+			dto.storeId,
+		);
+		if (!hasAccess) {
+			throw new UnauthorizedException(
+				'No tienes permisos para registrar empleados en esta tienda',
+			);
+		}
+
+		// Asignar companyId de la tienda y la tienda obligatoriamente
+		dto.companyId = store.companyId;
+		dto.storeIds = [dto.storeId];
+
+		// Validar que el rol (si fue enviado) pertenezca a la compañía
+		if (dto.roleId) {
+			const role = await this.dataSource.getRepository(Role).findOne({
+				where: {
+					id: dto.roleId,
+					companyId: store.companyId,
+					status: StatusEnum.ACTIVE,
+				},
+			});
+			if (!role) {
+				throw new BadRequestException(
+					'El rol no es válido o no pertenece a la compañía',
+				);
+			}
+		}
+
+		return this.createUserWithRole(dto);
+	}
+
+	async updateStoreEmployee(
+		dto: UpdateStoreEmployeeDto,
+		requesterUserId: string,
+	) {
+		const store = await this.storeRepository.findOne({
+			where: { id: dto.storeId, status: StatusEnum.ACTIVE },
+		});
+		if (!store) {
+			throw new NotFoundException(
+				'La tienda especificada no existe o no está activa',
+			);
+		}
+
+		const hasAccess = await this.userHasAccessToStore(
+			requesterUserId,
+			dto.storeId,
+		);
+		if (!hasAccess) {
+			throw new UnauthorizedException(
+				'No tienes permisos para actualizar empleados en esta tienda',
+			);
+		}
+
+		// Validar que el usuario objetivo esté asignado a esta tienda
+		const userStore = await this.userStoreRepository.findOne({
+			where: { userId: dto.id_user, storeId: dto.storeId },
+		});
+		if (!userStore) {
+			throw new NotFoundException('El empleado no está asignado a esta tienda');
+		}
+
+		// Asignar companyId de la tienda
+		dto.companyId = store.companyId;
+
+		// Validar que el rol (si fue enviado) pertenezca a la compañía
+		if (dto.roleId) {
+			const role = await this.dataSource.getRepository(Role).findOne({
+				where: {
+					id: dto.roleId,
+					companyId: store.companyId,
+					status: StatusEnum.ACTIVE,
+				},
+			});
+			if (!role) {
+				throw new BadRequestException(
+					'El rol no es válido o no pertenece a la compañía',
+				);
+			}
+		}
+
+		return this.updateUserWithRole(dto);
+	}
+
+	async activateStoreEmployee(
+		dto: StoreUserActionDto,
+		requesterUserId: string,
+	) {
+		const hasAccess = await this.userHasAccessToStore(
+			requesterUserId,
+			dto.storeId,
+		);
+		if (!hasAccess) {
+			throw new UnauthorizedException(
+				'No tienes permisos para gestionar empleados en esta tienda',
+			);
+		}
+
+		const userStore = await this.userStoreRepository.findOne({
+			where: { userId: dto.userId, storeId: dto.storeId },
+			relations: ['user', 'store'],
+		});
+		if (!userStore) {
+			throw new NotFoundException('El empleado no está asignado a esta tienda');
+		}
+
+		userStore.isActive = true;
+		userStore.updatedAt = new Date();
+		await this.userStoreRepository.save(userStore);
+
+		void this.auditService.logAction({
+			userId: requesterUserId,
+			companyId: userStore.companyId,
+			module: 'USERS',
+			action: 'STORE_USER_ACTIVATED',
+			entityName: 'UserStore',
+			entityId: `${dto.userId}:${dto.storeId}`,
+			description: `Acceso a tienda ${userStore.store?.name ?? dto.storeId} reactivado para el usuario ${userStore.user?.username ?? dto.userId}`,
+		});
+
+		return {
+			ok: true,
+			message: 'Empleado activado en la tienda correctamente',
+		};
+	}
+
+	async deactivateStoreEmployee(
+		dto: StoreUserActionDto,
+		requesterUserId: string,
+	) {
+		const hasAccess = await this.userHasAccessToStore(
+			requesterUserId,
+			dto.storeId,
+		);
+		if (!hasAccess) {
+			throw new UnauthorizedException(
+				'No tienes permisos para gestionar empleados en esta tienda',
+			);
+		}
+
+		const userStore = await this.userStoreRepository.findOne({
+			where: { userId: dto.userId, storeId: dto.storeId },
+			relations: ['user', 'store'],
+		});
+		if (!userStore) {
+			throw new NotFoundException('El empleado no está asignado a esta tienda');
+		}
+
+		userStore.isActive = false;
+		userStore.updatedAt = new Date();
+		await this.userStoreRepository.save(userStore);
+
+		void this.auditService.logAction({
+			userId: requesterUserId,
+			companyId: userStore.companyId,
+			module: 'USERS',
+			action: 'STORE_USER_DEACTIVATED',
+			entityName: 'UserStore',
+			entityId: `${dto.userId}:${dto.storeId}`,
+			description: `Acceso a tienda ${userStore.store?.name ?? dto.storeId} desactivado para el usuario ${userStore.user?.username ?? dto.userId}`,
+		});
+
+		return {
+			ok: true,
+			message: 'Empleado desactivado de la tienda correctamente',
+		};
 	}
 }

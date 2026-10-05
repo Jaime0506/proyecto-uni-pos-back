@@ -13,7 +13,11 @@ import {
 } from '@nestjs/common';
 import { ProductsService } from './products.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PermissionGuard, RequirePermissions } from '../auth/authorization-guard';
+import {
+	PermissionGuard,
+	RequirePermissions,
+	StoreAccessGuard,
+} from '../auth/authorization-guard';
 import { GetAllProductsDto } from './dto/get-all-products.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -21,7 +25,7 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { StockEntryDto } from './dto/stock-entry.dto';
 
 @Controller('products')
-@UseGuards(JwtAuthGuard, PermissionGuard)
+@UseGuards(JwtAuthGuard, PermissionGuard, StoreAccessGuard)
 export class ProductsController {
 	constructor(private readonly productsService: ProductsService) {}
 

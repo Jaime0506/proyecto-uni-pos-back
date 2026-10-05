@@ -156,7 +156,9 @@ export class ProductsService {
 				row.min_stock ??
 				row.stockMinimo ??
 				row.minStock
-			)?.toString().trim();
+			)
+				?.toString()
+				.trim();
 
 			let minStock: number | null = null;
 			if (rawMinStock !== undefined && rawMinStock !== '') {
@@ -343,11 +345,7 @@ export class ProductsService {
 		};
 	}
 
-	async uploadProducts(
-		body: any,
-		file: Express.Multer.File,
-		userId?: string,
-	) {
+	async uploadProducts(body: any, file: Express.Multer.File, userId?: string) {
 		const fileExtension =
 			file.originalname.split('.').pop()?.toLowerCase() || '';
 
@@ -404,9 +402,7 @@ export class ProductsService {
 						.andWhere('cat.name IN (:...names)', { names: categoryNames })
 						.getMany();
 
-					existingCategories.forEach((cat) =>
-						categoryCache.set(cat.name, cat),
-					);
+					existingCategories.forEach((cat) => categoryCache.set(cat.name, cat));
 
 					const missingNames = categoryNames.filter(
 						(name) => !categoryCache.has(name),
@@ -428,9 +424,7 @@ export class ProductsService {
 							.getRepository(Category)
 							.save(newCategories);
 
-						savedCategories.forEach((cat) =>
-							categoryCache.set(cat.name, cat),
-						);
+						savedCategories.forEach((cat) => categoryCache.set(cat.name, cat));
 					}
 				}
 
@@ -441,16 +435,14 @@ export class ProductsService {
 
 				const existingProducts =
 					validSkus.length > 0
-						? await transactionalEntityManager
-								.getRepository(Product)
-								.find({
-									where: {
-										company: { id: companyId },
-										storeId,
-										sku: In(validSkus),
-									},
-									relations: ['category', 'company'],
-								})
+						? await transactionalEntityManager.getRepository(Product).find({
+								where: {
+									company: { id: companyId },
+									storeId,
+									sku: In(validSkus),
+								},
+								relations: ['category', 'company'],
+							})
 						: [];
 
 				const existingMap = new Map<string, Product>();
@@ -463,7 +455,7 @@ export class ProductsService {
 
 				for (const row of validRows) {
 					const categoryEntity = row.categoryName
-						? categoryCache.get(row.categoryName) ?? null
+						? (categoryCache.get(row.categoryName) ?? null)
 						: null;
 
 					if (row.sku && existingMap.has(row.sku)) {
@@ -560,8 +552,7 @@ export class ProductsService {
 						newProduct.purchasePrice = row.purchasePrice;
 						newProduct.salePrice = row.salePrice;
 						newProduct.stock = row.stock;
-						newProduct.minStock =
-							row.minStock !== null ? row.minStock : 5;
+						newProduct.minStock = row.minStock !== null ? row.minStock : 5;
 						if (categoryEntity) {
 							newProduct.category = categoryEntity;
 						}

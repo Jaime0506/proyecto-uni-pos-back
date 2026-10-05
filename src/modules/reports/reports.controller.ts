@@ -10,7 +10,10 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PermissionGuard, RequirePermissions } from '../auth/authorization-guard';
+import {
+	PermissionGuard,
+	RequirePermissions,
+} from '../auth/authorization-guard';
 import { ReportsService } from './reports.service';
 import { GetReportsDto } from './dto/get-reports.dto';
 

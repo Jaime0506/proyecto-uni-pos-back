@@ -13,6 +13,11 @@ export class CreateStoreDto {
 	@IsString()
 	name!: string;
 
+	@ApiPropertyOptional({ description: 'El NIT de la tienda (opcional)' })
+	@IsOptional()
+	@IsString()
+	nit?: string;
+
 	@ApiPropertyOptional({ description: 'La dirección de la tienda' })
 	@IsOptional()
 	@IsString()
