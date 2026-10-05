@@ -164,4 +164,31 @@ export class CustomerPortalController {
 			data: { verified: result.verified },
 		};
 	}
+
+	// Obtener historial completo de devoluciones del cliente
+	@Get('returns')
+	@HttpCode(200)
+	@ApiOperation({
+		summary: 'Obtener historial de devoluciones del cliente (endpoint público)',
+	})
+	@ApiQuery({ name: 'customerId', type: Number, required: true })
+	@ApiQuery({ name: 'companyId', type: Number, required: true })
+	@ApiQuery({ name: 'storeId', type: Number, required: true })
+	async getReturns(
+		@Query('customerId', ParseIntPipe) customerId: number,
+		@Query('companyId', ParseIntPipe) companyId: number,
+		@Query('storeId', ParseIntPipe) storeId: number,
+	) {
+		const returns = await this.customerPortalService.getReturns(
+			customerId,
+			companyId,
+			storeId,
+		);
+
+		return {
+			ok: true,
+			message: 'Historial de devoluciones obtenido correctamente',
+			data: { result: returns },
+		};
+	}
 }

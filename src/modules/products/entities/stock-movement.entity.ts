@@ -33,7 +33,7 @@ export class StockMovement {
 	userId?: string;
 
 	@Column({ type: 'varchar', length: 50 })
-	type!: 'INITIAL' | 'MANUAL_ENTRY' | 'SALE' | 'ADJUSTMENT';
+	type!: 'INITIAL' | 'MANUAL_ENTRY' | 'SALE' | 'ADJUSTMENT' | 'RETURN';
 
 	@Column({ type: 'int' })
 	quantity!: number;

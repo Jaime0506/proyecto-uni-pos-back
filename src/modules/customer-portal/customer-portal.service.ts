@@ -65,6 +65,37 @@ export interface CustomerPurchase {
 	items: CustomerPurchaseItem[];
 }
 
+export interface CustomerReturnItem {
+	id: number;
+	productId: number;
+	productName: string;
+	quantity: number;
+	unitPrice: number;
+	taxRate: number;
+	taxAmount: number;
+	lineTotal: number;
+	itemCondition: string;
+	restockApproved: boolean;
+}
+
+export interface CustomerReturn {
+	id: number;
+	returnNumber: string;
+	saleId: number;
+	status: string;
+	reasonCategory: string;
+	customerNotes: string | null;
+	rejectionReason: string | null;
+	subtotalRefund: number;
+	taxRefund: number;
+	totalRefund: number;
+	refundMethod: string | null;
+	refundStatus: string;
+	createdAt: Date;
+	reviewedAt: Date | null;
+	items: CustomerReturnItem[];
+}
+
 @Injectable()
 export class CustomerPortalService {
 	constructor(private readonly dataSource: DataSource) {}
@@ -398,6 +429,99 @@ export class CustomerPortalService {
 			}
 			throw new InternalServerErrorException(
 				'Error al verificar la contraseña',
+			);
+		}
+	}
+
+	// Obtener historial completo de devoluciones del cliente
+	async getReturns(
+		customerId: number,
+		companyId: number,
+		storeId: number,
+	): Promise<CustomerReturn[]> {
+		try {
+			const rows = await this.dataSource.query(
+				`
+				SELECT
+					sr.id                AS return_id,
+					sr.return_number     AS return_number,
+					sr.sale_id           AS sale_id,
+					sr.status            AS status,
+					sr.reason_category   AS reason_category,
+					sr.customer_notes    AS customer_notes,
+					sr.rejection_reason  AS rejection_reason,
+					sr.subtotal_refund   AS subtotal_refund,
+					sr.tax_refund        AS tax_refund,
+					sr.total_refund      AS total_refund,
+					sr.refund_method     AS refund_method,
+					sr.refund_status     AS refund_status,
+					sr.created_at        AS created_at,
+					sr.reviewed_at       AS reviewed_at,
+					sri.id               AS item_id,
+					sri.product_id       AS product_id,
+					sri.product_name     AS product_name,
+					sri.quantity         AS quantity,
+					sri.unit_price       AS unit_price,
+					sri.tax_rate         AS tax_rate,
+					sri.tax_amount       AS tax_amount,
+					sri.line_total_refund AS line_total,
+					sri.item_condition   AS item_condition,
+					sri.restock_approved AS restock_approved
+				FROM sys.sale_returns sr
+				LEFT JOIN sys.sale_return_items sri ON sri.sale_return_id = sr.id
+				WHERE sr.customer_id = $1
+				  AND sr.company_id  = $2
+				  AND sr.store_id    = $3
+				ORDER BY sr.created_at DESC, sri.id ASC
+				`,
+				[customerId, companyId, storeId],
+			);
+
+			const returnsMap = new Map<number, CustomerReturn>();
+
+			for (const row of rows) {
+				const returnId = Number(row.return_id);
+				if (!returnsMap.has(returnId)) {
+					returnsMap.set(returnId, {
+						id: returnId,
+						returnNumber: row.return_number,
+						saleId: Number(row.sale_id),
+						status: row.status,
+						reasonCategory: row.reason_category,
+						customerNotes: row.customer_notes ?? null,
+						rejectionReason: row.rejection_reason ?? null,
+						subtotalRefund: Number(row.subtotal_refund),
+						taxRefund: Number(row.tax_refund),
+						totalRefund: Number(row.total_refund),
+						refundMethod: row.refund_method ?? null,
+						refundStatus: row.refund_status,
+						createdAt: row.created_at,
+						reviewedAt: row.reviewed_at ? new Date(row.reviewed_at) : null,
+						items: [],
+					});
+				}
+
+				if (row.item_id) {
+					returnsMap.get(returnId)!.items.push({
+						id: Number(row.item_id),
+						productId: Number(row.product_id),
+						productName: row.product_name,
+						quantity: Number(row.quantity),
+						unitPrice: Number(row.unit_price),
+						taxRate: Number(row.tax_rate || 0),
+						taxAmount: Number(row.tax_amount || 0),
+						lineTotal: Number(row.line_total),
+						itemCondition: row.item_condition,
+						restockApproved: Boolean(row.restock_approved),
+					});
+				}
+			}
+
+			return Array.from(returnsMap.values());
+		} catch (error) {
+			console.error(error);
+			throw new InternalServerErrorException(
+				'Error al obtener el historial de devoluciones',
 			);
 		}
 	}
