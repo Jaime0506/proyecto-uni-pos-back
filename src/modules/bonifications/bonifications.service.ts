@@ -7,8 +7,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Bonus } from './entities/bonification.entity';
 import { Customer } from '../sales/entities/customer.entity';
+import { BonusTransaction } from '../sales/entities/bonus-transactions.entity';
 import { GetAllBonificationsDto } from './dto/get-all-bonifications.dto';
 import { UpdateBonificationDto } from './dto/update-bonification.dto';
+import { GetBonusTransactionsDto } from './dto/get-bonus-transactions.dto';
 
 @Injectable()
 export class BonificationsService {
@@ -17,6 +19,8 @@ export class BonificationsService {
 		private readonly bonusRepository: Repository<Bonus>,
 		@InjectRepository(Customer)
 		private readonly customerRepository: Repository<Customer>,
+		@InjectRepository(BonusTransaction)
+		private readonly bonusTransactionRepository: Repository<BonusTransaction>,
 	) {}
 
 	// Obtener todas las bonificaciones
@@ -65,7 +69,6 @@ export class BonificationsService {
 					updated_at: row.bonus_updated_at,
 				};
 
-				// Incluir datos del customer si existe (usando nombres de columna de BD: snake_case)
 				if (row.customer_id) {
 					bonusData.customer = {
 						id: row.customer_id,
@@ -93,10 +96,10 @@ export class BonificationsService {
 		}
 	}
 
-	// Actualizar una bonificación
+	// Actualizar una bonificación con auditoría en kardex de transacciones
 	async updateBonification(dto: UpdateBonificationDto) {
 		try {
-			const { id, customer_id, total_amount } = dto;
+			const { id, customer_id, total_amount, notes } = dto;
 
 			// Verificar si la bonificación existe
 			const existingBonus = await this.bonusRepository.findOne({
@@ -134,14 +137,33 @@ export class BonificationsService {
 				existingBonus.customer_id = customer_id;
 			}
 
+			const previousAmount = Number(existingBonus.total_amount);
+			let newAmount = previousAmount;
+
 			// Actualizar campos
 			if (total_amount !== undefined) {
-				existingBonus.total_amount = total_amount;
+				newAmount = Math.max(0, Number(total_amount));
+				existingBonus.total_amount = newAmount;
 			}
 
 			existingBonus.updated_at = new Date();
 
 			const updatedBonus = await this.bonusRepository.save(existingBonus);
+
+			// Registrar transacción de auditoría si hubo cambio en el saldo
+			const difference = newAmount - previousAmount;
+			if (difference !== 0) {
+				await this.bonusTransactionRepository.save({
+					customer_id: existingBonus.customer_id,
+					company_id: existingBonus.company_id || 0,
+					store_id: existingBonus.store_id || 0,
+					type: 'ADJUSTMENT',
+					amount: difference,
+					previous_amount: previousAmount,
+					new_amount: newAmount,
+					notes: notes || 'Ajuste manual de bonificación por administrador',
+				});
+			}
 
 			return {
 				ok: true,
@@ -155,6 +177,38 @@ export class BonificationsService {
 			}
 			throw new InternalServerErrorException(
 				'Error al actualizar la bonificación',
+			);
+		}
+	}
+
+	// Obtener historial de movimientos de bonificaciones de un cliente
+	async getBonusTransactions(dto: GetBonusTransactionsDto) {
+		try {
+			const query = this.bonusTransactionRepository
+				.createQueryBuilder('bt')
+				.where('bt.customer_id = :customerId', { customerId: dto.customerId });
+
+			if (dto.companyId) {
+				query.andWhere('bt.company_id = :companyId', { companyId: dto.companyId });
+			}
+
+			if (dto.storeId) {
+				query.andWhere('bt.store_id = :storeId', { storeId: dto.storeId });
+			}
+
+			const transactions = await query
+				.orderBy('bt.created_at', 'DESC')
+				.getMany();
+
+			return {
+				ok: true,
+				message: 'Transacciones de bonificación obtenidas correctamente',
+				data: { result: transactions },
+			};
+		} catch (error) {
+			console.error(error);
+			throw new InternalServerErrorException(
+				'Error al obtener las transacciones de bonificación',
 			);
 		}
 	}

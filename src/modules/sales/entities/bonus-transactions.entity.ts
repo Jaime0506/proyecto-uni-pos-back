@@ -22,6 +22,10 @@ export class BonusTransaction {
 	@Column({ type: 'int' })
 	store_id!: number;
 
+	// Tipo de movimiento: EARN, REDEEM, REFUND, ADJUSTMENT
+	@Column({ type: 'varchar', length: 30, default: 'EARN' })
+	type!: 'EARN' | 'REDEEM' | 'REFUND' | 'ADJUSTMENT';
+
 	// cuánto se suma o resta en esta operación
 	@Column({ type: 'numeric', precision: 18, scale: 2 })
 	amount!: number;
@@ -33,6 +37,10 @@ export class BonusTransaction {
 	// saldo después del movimiento
 	@Column({ type: 'numeric', precision: 18, scale: 2 })
 	new_amount!: number;
+
+	// notas explicativas para trazabilidad y auditoría
+	@Column({ type: 'text', nullable: true })
+	notes?: string | null;
 
 	@CreateDateColumn({ type: 'timestamptz', default: () => 'now()' })
 	created_at!: Date;

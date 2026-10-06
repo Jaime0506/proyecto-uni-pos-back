@@ -8,6 +8,7 @@ import {
 	ParseIntPipe,
 	Patch,
 	Post,
+	Query,
 	UseGuards,
 } from '@nestjs/common';
 import { CustomersService } from './customers.service';
@@ -27,16 +28,39 @@ import {
 export class CustomersController {
 	constructor(private readonly customersService: CustomersService) {}
 
-	// Obtener todos los clientes (incluyendo eliminados)
+	// Obtener clientes por compañía y tienda (o todos si no se especifican filtros)
 	@Get('get-all')
 	@UseGuards(PermissionGuard)
 	@RequirePermissions(['customer:read'])
 	@HttpCode(200)
-	async getAllCustomers() {
-		return await this.customersService.getAllCustomers();
+	async getAllCustomers(
+		@Query('companyId') companyId?: string,
+		@Query('storeId') storeId?: string,
+	) {
+		return await this.customersService.getAllCustomers(
+			companyId ? Number(companyId) : undefined,
+			storeId ? Number(storeId) : undefined,
+		);
 	}
 
-	// Crear un nuevo cliente
+	// Requerimiento C2, C5, C6: Ver perfil y actividad 360° del cliente (compras, devoluciones, bonos)
+	@Get(':id/activity')
+	@UseGuards(PermissionGuard)
+	@RequirePermissions(['customer:read'])
+	@HttpCode(200)
+	async getCustomerActivity(
+		@Param('id', ParseIntPipe) id: number,
+		@Query('companyId', ParseIntPipe) companyId: number,
+		@Query('storeId', ParseIntPipe) storeId: number,
+	) {
+		return await this.customersService.getCustomerActivity(
+			id,
+			companyId,
+			storeId,
+		);
+	}
+
+	// Crear un nuevo cliente (C1: asociando store_id obligatorio)
 	@Post('create')
 	@UseGuards(PermissionGuard)
 	@RequirePermissions(['customer:create'])
@@ -54,7 +78,7 @@ export class CustomersController {
 		return await this.customersService.updateCustomer(dto);
 	}
 
-	// Eliminar un cliente (soft delete)
+	// Eliminar un cliente (soft delete) solo si no tiene historial de compras (C4)
 	@Delete('delete')
 	@UseGuards(PermissionGuard)
 	@RequirePermissions(['customer:delete'])

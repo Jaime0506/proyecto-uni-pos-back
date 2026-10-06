@@ -32,7 +32,9 @@ export class GetAllReturnsDto {
 	@IsOptional()
 	endDate?: string;
 
-	@ApiPropertyOptional({ description: 'Término de búsqueda (consecutivo, # venta, cédula)' })
+	@ApiPropertyOptional({
+		description: 'Término de búsqueda (consecutivo, # venta, cédula)',
+	})
 	@IsString()
 	@IsOptional()
 	search?: string;

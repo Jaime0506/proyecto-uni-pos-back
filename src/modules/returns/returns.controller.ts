@@ -14,7 +14,10 @@ import { CreateReturnRequestDto } from './dto/create-return-request.dto';
 import { ApproveReturnDto, RejectReturnDto } from './dto/review-return.dto';
 import { GetAllReturnsDto } from './dto/get-all-returns.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PermissionGuard, RequirePermissions } from '../auth/authorization-guard';
+import {
+	PermissionGuard,
+	RequirePermissions,
+} from '../auth/authorization-guard';
 
 @ApiTags('Returns')
 @ApiBearerAuth()
@@ -26,7 +29,8 @@ export class ReturnsController {
 	@RequirePermissions({ anyOf: ['sale:read', 'return:create', 'return:read'] })
 	@Post('eligibility')
 	@ApiOperation({
-		summary: 'Validar si una venta es apta para devolución y obtener saldos disponibles por producto',
+		summary:
+			'Validar si una venta es apta para devolución y obtener saldos disponibles por producto',
 	})
 	async checkEligibility(
 		@Body() body: { saleId: number; companyId?: number; storeId?: number },
@@ -41,7 +45,8 @@ export class ReturnsController {
 	@RequirePermissions(['return:create'])
 	@Post('create')
 	@ApiOperation({
-		summary: 'Registrar una solicitud de devolución granular (producto por producto)',
+		summary:
+			'Registrar una solicitud de devolución granular (producto por producto)',
 	})
 	async createReturn(
 		@Body() dto: CreateReturnRequestDto,
@@ -101,7 +106,8 @@ export class ReturnsController {
 	@RequirePermissions(['return:read'])
 	@Get(':id/receipt-data')
 	@ApiOperation({
-		summary: 'Obtener datos formateados para impresión de comprobante digital en PDF',
+		summary:
+			'Obtener datos formateados para impresión de comprobante digital en PDF',
 	})
 	async getReceiptData(@Param('id', ParseIntPipe) id: number) {
 		return await this.returnsService.getReceiptData(id);

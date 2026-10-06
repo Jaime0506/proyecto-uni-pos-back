@@ -3,7 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { RewardRule } from './entities/reward-rule.entity';
 import { RewardRuleProduct } from './entities/reward-rule-product.entity';
+import { RewardRuleCategory } from './entities/reward-rule-category.entity';
 import { Product } from '../products/entities/product.entity';
+import { Category } from '../categories/entities/category.entity';
 import { CreateRewardRuleDto } from './dto/create-reward-rule.dto';
 import { processTransaction } from '../../database/transactions';
 
@@ -15,28 +17,56 @@ export class RewardsService {
 		private readonly rewardRuleRepository: Repository<RewardRule>,
 		@InjectRepository(RewardRuleProduct)
 		private readonly rewardRuleProductRepository: Repository<RewardRuleProduct>,
+		@InjectRepository(RewardRuleCategory)
+		private readonly rewardRuleCategoryRepository: Repository<RewardRuleCategory>,
 		@InjectRepository(Product)
 		private readonly productRepository: Repository<Product>,
+		@InjectRepository(Category)
+		private readonly categoryRepository: Repository<Category>,
 	) {}
 
 	async createRewardRule(
 		createRewardRuleDto: CreateRewardRuleDto,
 		createdBy: string,
 	): Promise<RewardRule> {
-		const { products, ...rewardRuleData } = createRewardRuleDto;
+		const { products, categories, ...rewardRuleData } = createRewardRuleDto;
 
-		// Validar que todos los productos existan
-		const productIds = products.map((p) => p.productId);
-		const existingProducts = await this.productRepository.find({
-			where: productIds.map((id) => ({ id })),
-		});
-
-		if (existingProducts.length !== productIds.length) {
-			const foundIds = existingProducts.map((p) => p.id);
-			const missingIds = productIds.filter((id) => !foundIds.includes(id));
+		if ((!products || products.length === 0) && (!categories || categories.length === 0)) {
 			throw new BadRequestException(
-				`Los siguientes productos no existen: ${missingIds.join(', ')}`,
+				'Debe especificar al menos un producto o una categoría para la regla de bonificación.',
 			);
+		}
+
+		// Validar que todos los productos existan si se proporcionaron
+		if (products && products.length > 0) {
+			const productIds = products.map((p) => p.productId);
+			const existingProducts = await this.productRepository.find({
+				where: productIds.map((id) => ({ id })),
+			});
+
+			if (existingProducts.length !== productIds.length) {
+				const foundIds = existingProducts.map((p) => p.id);
+				const missingIds = productIds.filter((id) => !foundIds.includes(id));
+				throw new BadRequestException(
+					`Los siguientes productos no existen: ${missingIds.join(', ')}`,
+				);
+			}
+		}
+
+		// Validar que todas las categorías existan si se proporcionaron
+		if (categories && categories.length > 0) {
+			const categoryIds = categories.map((c) => c.categoryId);
+			const existingCategories = await this.categoryRepository.find({
+				where: categoryIds.map((id) => ({ id })),
+			});
+
+			if (existingCategories.length !== categoryIds.length) {
+				const foundCatIds = existingCategories.map((c) => c.id);
+				const missingCatIds = categoryIds.filter((id) => !foundCatIds.includes(id));
+				throw new BadRequestException(
+					`Las siguientes categorías no existen: ${missingCatIds.join(', ')}`,
+				);
+			}
 		}
 
 		// Validar fechas si se proporcionan
@@ -51,11 +81,13 @@ export class RewardsService {
 			}
 		}
 
-		// Crear la regla de recompensa y sus productos en una transacción
+		// Crear la regla de recompensa, productos y categorías en una transacción
 		return await processTransaction(this.dataSource, async (queryRunner) => {
 			const rewardRuleRepo = queryRunner.manager.getRepository(RewardRule);
 			const rewardRuleProductRepo =
 				queryRunner.manager.getRepository(RewardRuleProduct);
+			const rewardRuleCategoryRepo =
+				queryRunner.manager.getRepository(RewardRuleCategory);
 
 			// Crear la regla de recompensa
 			const rewardRule = rewardRuleRepo.create({
@@ -69,22 +101,36 @@ export class RewardsService {
 
 			const savedRewardRule = await rewardRuleRepo.save(rewardRule);
 
-			// Crear los productos de la regla de recompensa
-			const rewardRuleProducts = products.map((productData) =>
-				rewardRuleProductRepo.create({
-					...productData,
-					rewardRuleId: savedRewardRule.id,
-				}),
-			);
+			// Crear los productos de la regla si existen
+			if (products && products.length > 0) {
+				const rewardRuleProducts = products.map((productData) =>
+					rewardRuleProductRepo.create({
+						...productData,
+						rewardRuleId: savedRewardRule.id,
+					}),
+				);
+				await rewardRuleProductRepo.save(rewardRuleProducts);
+			}
 
-			await rewardRuleProductRepo.save(rewardRuleProducts);
+			// Crear las categorías de la regla si existen
+			if (categories && categories.length > 0) {
+				const rewardRuleCategories = categories.map((catData) =>
+					rewardRuleCategoryRepo.create({
+						...catData,
+						rewardRuleId: savedRewardRule.id,
+					}),
+				);
+				await rewardRuleCategoryRepo.save(rewardRuleCategories);
+			}
 
-			// Cargar la regla completa con sus productos para retornarla
+			// Cargar la regla completa con sus relaciones
 			const completeRewardRule = await rewardRuleRepo.findOne({
 				where: { id: savedRewardRule.id },
 				relations: [
 					'products',
 					'products.product',
+					'categories',
+					'categories.category',
 					'company',
 					'store',
 					'createdByUser',
@@ -108,6 +154,8 @@ export class RewardsService {
 			relations: [
 				'products',
 				'products.product',
+				'categories',
+				'categories.category',
 				'company',
 				'store',
 				'createdByUser',
@@ -122,6 +170,8 @@ export class RewardsService {
 			relations: [
 				'products',
 				'products.product',
+				'categories',
+				'categories.category',
 				'company',
 				'store',
 				'createdByUser',

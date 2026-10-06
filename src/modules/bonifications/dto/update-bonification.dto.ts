@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class UpdateBonificationDto {
 	@ApiProperty({ description: 'El id de la bonificación' })
@@ -16,4 +16,9 @@ export class UpdateBonificationDto {
 	@IsOptional()
 	@IsNumber()
 	total_amount?: number;
+
+	@ApiPropertyOptional({ description: 'Motivo u observaciones del ajuste manual' })
+	@IsOptional()
+	@IsString()
+	notes?: string;
 }

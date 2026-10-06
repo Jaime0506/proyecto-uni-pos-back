@@ -12,6 +12,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CreateRewardRuleProductDto } from './create-reward-rule-product.dto';
+import { CreateRewardRuleCategoryDto } from './create-reward-rule-category.dto';
 
 export class CreateRewardRuleDto {
 	@ApiProperty({
@@ -85,7 +86,7 @@ export class CreateRewardRuleDto {
 	@Type(() => Number)
 	storeId?: number | null;
 
-	@ApiProperty({
+	@ApiPropertyOptional({
 		description:
 			'Lista de productos con sus respectivos descuentos y cantidades',
 		type: [CreateRewardRuleProductDto],
@@ -96,16 +97,29 @@ export class CreateRewardRuleDto {
 				minQty: 2,
 				maxQty: 10,
 			},
-			{
-				productId: 2,
-				discountValue: 5.0,
-				minQty: 1,
-				maxQty: 5,
-			},
 		],
 	})
+	@IsOptional()
 	@IsArray()
 	@ValidateNested({ each: true })
 	@Type(() => CreateRewardRuleProductDto)
-	products: CreateRewardRuleProductDto[];
+	products?: CreateRewardRuleProductDto[];
+
+	@ApiPropertyOptional({
+		description:
+			'Lista de categorías con sus respectivos porcentajes o valores de bonificación',
+		type: [CreateRewardRuleCategoryDto],
+		example: [
+			{
+				categoryId: 1,
+				discountPercentage: 5.0,
+				minQty: 1,
+			},
+		],
+	})
+	@IsOptional()
+	@IsArray()
+	@ValidateNested({ each: true })
+	@Type(() => CreateRewardRuleCategoryDto)
+	categories?: CreateRewardRuleCategoryDto[];
 }

@@ -23,6 +23,9 @@ export class Product {
 	@JoinColumn({ name: 'company_id' })
 	company!: Company;
 
+	@Column({ name: 'category_id', type: 'int', nullable: true })
+	categoryId?: number | null;
+
 	@ManyToOne(() => Category, { nullable: true })
 	@JoinColumn({ name: 'category_id' })
 	category!: Category;

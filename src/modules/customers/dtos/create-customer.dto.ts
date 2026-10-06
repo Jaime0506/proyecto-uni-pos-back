@@ -17,6 +17,14 @@ export class CreateCustomerDto {
 	companyId!: number;
 
 	@ApiProperty({
+		description: 'El id de la tienda donde se registra el cliente',
+	})
+	@IsNotEmpty({ message: 'El id de la tienda es obligatorio' })
+	@IsInt()
+	@Min(1)
+	storeId!: number;
+
+	@ApiProperty({
 		description: 'El número de identificación nacional del cliente',
 	})
 	@IsNotEmpty()

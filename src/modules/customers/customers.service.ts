@@ -6,9 +6,13 @@ import {
 	NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { Customer } from './entities/customer.entity';
 import { Company } from '../companies/entities/company.entity';
+import { Store } from '../stores/entities/store.entity';
+import { Sale } from '../sales/entities/sale.entity';
+import { Bonus } from '../sales/entities/bonuses.entity';
+import { CustomerPortalService } from '../customer-portal/customer-portal.service';
 import { CreateCustomerDto } from './dtos/create-customer.dto';
 import { UpdateCustomerDto } from './dtos/update-customer.dto';
 import { DeleteCustomerDto } from './dtos/delete-customer.dto';
@@ -21,15 +25,84 @@ export class CustomersService {
 		private readonly customerRepository: Repository<Customer>,
 		@InjectRepository(Company)
 		private readonly companyRepository: Repository<Company>,
+		@InjectRepository(Store)
+		private readonly storeRepository: Repository<Store>,
+		@InjectRepository(Sale)
+		private readonly saleRepository: Repository<Sale>,
+		private readonly customerPortalService: CustomerPortalService,
 	) {}
 
-	// Obtener todos los clientes (incluyendo eliminados)
-	async getAllCustomers() {
+	// Obtener clientes enriquecidos con saldo de bonos y conteo de compras
+	async getAllCustomers(companyId?: number, storeId?: number) {
 		try {
-			const customers = await this.customerRepository.find({
-				withDeleted: true,
-				relations: ['company'],
-			});
+			const qb = this.customerRepository
+				.createQueryBuilder('c')
+				.leftJoin(Bonus, 'b', 'b.customer_id = c.id')
+				.leftJoin(Sale, 's', 's.customer_id = c.id AND s.deleted_at IS NULL')
+				.select([
+					'c.id AS id',
+					'c.company_id AS "companyId"',
+					'c.store_id AS "storeId"',
+					'c.national_id AS "nationalId"',
+					'c.first_name AS "firstName"',
+					'c.last_name AS "lastName"',
+					'c.phone AS phone',
+					'c.email AS email',
+					'c.status AS status',
+					'c.created_at AS "createdAt"',
+					'c.updated_at AS "updatedAt"',
+					'c.deleted_at AS "deletedAt"',
+					'COALESCE(MAX(b.total_amount), 0) AS "bonusBalance"',
+					'COUNT(DISTINCT s.id) AS "salesCount"',
+				])
+				.groupBy('c.id')
+				.orderBy('c.created_at', 'DESC');
+
+			if (companyId) {
+				qb.where('c.company_id = :companyId', { companyId });
+			}
+
+			if (storeId) {
+				qb.andWhere('c.store_id = :storeId', {
+					storeId,
+				});
+			}
+
+			interface RawCustomerRow {
+				id: number | string;
+				companyId: number | string;
+				storeId: number | string | null;
+				nationalId: string;
+				firstName: string | null;
+				lastName: string | null;
+				phone: string | null;
+				email: string | null;
+				status: StatusEnum;
+				createdAt: Date;
+				updatedAt: Date;
+				deletedAt: Date | null;
+				bonusBalance: number | string | null;
+				salesCount: number | string;
+			}
+
+			const rawCustomers = await qb.getRawMany<RawCustomerRow>();
+
+			const customers = rawCustomers.map((row: RawCustomerRow) => ({
+				id: Number(row.id),
+				companyId: Number(row.companyId),
+				storeId: row.storeId ? Number(row.storeId) : null,
+				nationalId: row.nationalId,
+				firstName: row.firstName || '',
+				lastName: row.lastName || '',
+				phone: row.phone || '',
+				email: row.email || '',
+				status: row.status,
+				createdAt: row.createdAt,
+				updatedAt: row.updatedAt,
+				deletedAt: row.deletedAt,
+				bonusBalance: Number(row.bonusBalance || 0),
+				salesCount: Number(row.salesCount || 0),
+			}));
 
 			return {
 				ok: true,
@@ -42,10 +115,18 @@ export class CustomersService {
 		}
 	}
 
-	// Crear un nuevo cliente
+	// Crear un nuevo cliente (asociando obligatoriamente la tienda donde se registra - C1)
 	async createCustomer(dto: CreateCustomerDto) {
 		try {
-			const { companyId, nationalId, firstName, lastName, phone, email } = dto;
+			const {
+				companyId,
+				storeId,
+				nationalId,
+				firstName,
+				lastName,
+				phone,
+				email,
+			} = dto;
 
 			// Verificar si la compañía existe
 			const company = await this.companyRepository.findOne({
@@ -56,6 +137,18 @@ export class CustomersService {
 			if (!company) {
 				throw new BadRequestException(
 					`La compañía con ID ${companyId} no existe o está desactivada`,
+				);
+			}
+
+			// C1: Verificar si la tienda existe y pertenece a la compañía
+			const store = await this.storeRepository.findOne({
+				where: { id: storeId, companyId },
+				withDeleted: false,
+			});
+
+			if (!store) {
+				throw new BadRequestException(
+					`La tienda con ID ${storeId} no existe o no pertenece a la compañía`,
 				);
 			}
 
@@ -77,6 +170,9 @@ export class CustomersService {
 			// Crear el cliente
 			const newCustomer = new Customer();
 			newCustomer.company = company;
+			newCustomer.companyId = company.id;
+			newCustomer.store = store;
+			newCustomer.storeId = store.id;
 			newCustomer.nationalId = nationalId;
 			if (firstName !== undefined) newCustomer.firstName = firstName;
 			if (lastName !== undefined) newCustomer.lastName = lastName;
@@ -186,7 +282,7 @@ export class CustomersService {
 		}
 	}
 
-	// Eliminar un cliente (soft delete)
+	// Eliminar un cliente (soft delete) solo si no tiene historial de compras (C4)
 	async deleteCustomer(dto: DeleteCustomerDto) {
 		try {
 			const { id } = dto;
@@ -199,6 +295,17 @@ export class CustomersService {
 
 			if (!existingCustomer) {
 				throw new BadRequestException(`El cliente con ID ${id} no existe`);
+			}
+
+			// C4: Restricción de compras - solo se puede eliminar si NO tiene compras
+			const salesCount = await this.saleRepository.count({
+				where: { customer_id: id, deleted_at: IsNull() },
+			});
+
+			if (salesCount > 0) {
+				throw new ConflictException(
+					'No es posible eliminar el cliente porque posee historial de compras en el sistema. Para restringir su acceso, cambie su estado a Inactivo.',
+				);
 			}
 
 			// Eliminar el cliente (soft delete)
@@ -216,10 +323,73 @@ export class CustomersService {
 			};
 		} catch (error) {
 			console.error(error);
-			if (error instanceof BadRequestException) {
+			if (
+				error instanceof BadRequestException ||
+				error instanceof ConflictException
+			) {
 				throw error;
 			}
 			throw new InternalServerErrorException('Error al eliminar el cliente');
+		}
+	}
+
+	// Requerimiento C2, C5, C6: Obtener ficha y actividad 360° del cliente en la tienda
+	async getCustomerActivity(
+		customerId: number,
+		companyId: number,
+		storeId: number,
+	) {
+		try {
+			const customer = await this.customerRepository.findOne({
+				where: { id: customerId, companyId },
+				withDeleted: true,
+			});
+
+			if (!customer) {
+				throw new NotFoundException(
+					`El cliente con ID ${customerId} no existe`,
+				);
+			}
+
+			const [bonus, purchases, transactions, returns] = await Promise.all([
+				this.customerPortalService.getBonus(customerId, companyId, storeId),
+				this.customerPortalService.getPurchases(customerId, companyId, storeId),
+				this.customerPortalService.getTransactions(
+					customerId,
+					companyId,
+					storeId,
+				),
+				this.customerPortalService.getReturns(customerId, companyId, storeId),
+			]);
+
+			return {
+				ok: true,
+				message: 'Actividad del cliente obtenida correctamente',
+				data: {
+					customer: {
+						id: customer.id,
+						nationalId: customer.nationalId,
+						firstName: customer.firstName || '',
+						lastName: customer.lastName || '',
+						phone: customer.phone || '',
+						email: customer.email || '',
+						status: customer.status,
+						createdAt: customer.createdAt,
+						updatedAt: customer.updatedAt,
+						deletedAt: customer.deletedAt,
+					},
+					bonus,
+					purchases,
+					transactions,
+					returns,
+				},
+			};
+		} catch (error) {
+			console.error(error);
+			if (error instanceof NotFoundException) throw error;
+			throw new InternalServerErrorException(
+				'Error al obtener la actividad del cliente',
+			);
 		}
 	}
 

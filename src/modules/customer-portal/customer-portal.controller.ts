@@ -55,6 +55,10 @@ export class CustomerPortalController {
 		@Query('companyId', ParseIntPipe) companyId: number,
 		@Query('storeId', ParseIntPipe) storeId: number,
 	) {
+		await this.customerPortalService.checkCustomerNotDeleted(
+			customerId,
+			companyId,
+		);
 		const bonus = await this.customerPortalService.getBonus(
 			customerId,
 			companyId,
@@ -83,6 +87,10 @@ export class CustomerPortalController {
 		@Query('companyId', ParseIntPipe) companyId: number,
 		@Query('storeId', ParseIntPipe) storeId: number,
 	) {
+		await this.customerPortalService.checkCustomerNotDeleted(
+			customerId,
+			companyId,
+		);
 		const transactions = await this.customerPortalService.getTransactions(
 			customerId,
 			companyId,
@@ -111,6 +119,10 @@ export class CustomerPortalController {
 		@Query('companyId', ParseIntPipe) companyId: number,
 		@Query('storeId', ParseIntPipe) storeId: number,
 	) {
+		await this.customerPortalService.checkCustomerNotDeleted(
+			customerId,
+			companyId,
+		);
 		const purchases = await this.customerPortalService.getPurchases(
 			customerId,
 			companyId,
@@ -179,6 +191,10 @@ export class CustomerPortalController {
 		@Query('companyId', ParseIntPipe) companyId: number,
 		@Query('storeId', ParseIntPipe) storeId: number,
 	) {
+		await this.customerPortalService.checkCustomerNotDeleted(
+			customerId,
+			companyId,
+		);
 		const returns = await this.customerPortalService.getReturns(
 			customerId,
 			companyId,

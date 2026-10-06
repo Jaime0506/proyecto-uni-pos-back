@@ -21,6 +21,7 @@ export interface CustomerLookupResult {
 	storeId: number;
 	storeName: string;
 	storeAddress: string | null;
+	isDeleted: boolean;
 }
 
 export interface BonusResult {
@@ -100,6 +101,22 @@ export interface CustomerReturn {
 export class CustomerPortalService {
 	constructor(private readonly dataSource: DataSource) {}
 
+	// Validar que el cliente no haya sido eliminado
+	async checkCustomerNotDeleted(
+		customerId: number,
+		companyId: number,
+	): Promise<void> {
+		const rows = await this.dataSource.query(
+			`SELECT deleted_at FROM sys.customers WHERE id = $1 AND company_id = $2`,
+			[customerId, companyId],
+		);
+		if (rows && rows.length > 0 && rows[0].deleted_at) {
+			throw new BadRequestException(
+				'Has sido eliminado de esta tienda, favor comunícate con la tienda.',
+			);
+		}
+	}
+
 	// Buscar cliente por cédula en todas las empresas y tiendas donde aparece
 	async lookupCustomer(nationalId: string): Promise<CustomerLookupResult[]> {
 		if (!nationalId || nationalId.trim().length < 5) {
@@ -123,12 +140,12 @@ export class CustomerPortalService {
 					co.name           AS company_name,
 					s.id              AS store_id,
 					s.name            AS store_name,
-					s.address         AS store_address
+					s.address         AS store_address,
+					c.deleted_at      AS deleted_at
 				FROM sys.customers c
 				INNER JOIN sys.companies co ON co.id = c.company_id
 				INNER JOIN sys.stores   s  ON s.id  = c.store_id
 				WHERE c.national_id = $1
-				  AND c.deleted_at IS NULL
 				  AND co.status    = 'active'
 				  AND s.deleted_at IS NULL
 				ORDER BY co.name, s.name
@@ -149,6 +166,7 @@ export class CustomerPortalService {
 				storeId: Number(row.store_id),
 				storeName: row.store_name,
 				storeAddress: row.store_address ?? null,
+				isDeleted: Boolean(row.deleted_at),
 			}));
 		} catch (error) {
 			console.error(error);
@@ -337,12 +355,18 @@ export class CustomerPortalService {
 
 		try {
 			const rows = await this.dataSource.query(
-				`SELECT id, company_id, password FROM sys.customers WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`,
+				`SELECT id, company_id, password, deleted_at FROM sys.customers WHERE id = $1 AND company_id = $2`,
 				[customerId, companyId],
 			);
 
 			if (!rows || rows.length === 0) {
 				throw new NotFoundException('Cliente no encontrado');
+			}
+
+			if (rows[0].deleted_at) {
+				throw new BadRequestException(
+					'Has sido eliminado de esta tienda, favor comunícate con la tienda.',
+				);
 			}
 
 			if (rows[0].password) {
@@ -389,7 +413,7 @@ export class CustomerPortalService {
 
 		try {
 			const rows = await this.dataSource.query(
-				`SELECT id, password FROM sys.customers WHERE id = $1 AND company_id = $2 AND deleted_at IS NULL`,
+				`SELECT id, password, deleted_at FROM sys.customers WHERE id = $1 AND company_id = $2`,
 				[customerId, companyId],
 			);
 
@@ -398,6 +422,12 @@ export class CustomerPortalService {
 			}
 
 			const customer = rows[0];
+
+			if (customer.deleted_at) {
+				throw new BadRequestException(
+					'Has sido eliminado de esta tienda, favor comunícate con la tienda.',
+				);
+			}
 
 			if (!customer.password) {
 				throw new BadRequestException(

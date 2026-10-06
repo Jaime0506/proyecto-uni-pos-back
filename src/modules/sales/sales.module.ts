@@ -10,6 +10,8 @@ import { Customer } from './entities/customer.entity';
 import { Product } from '../products/entities/product.entity';
 import { StockMovement } from '../products/entities/stock-movement.entity';
 import { RewardRule } from '../rewards/entities/reward-rule.entity';
+import { RewardRuleProduct } from '../rewards/entities/reward-rule-product.entity';
+import { RewardRuleCategory } from '../rewards/entities/reward-rule-category.entity';
 
 @Module({
 	imports: [
@@ -20,6 +22,8 @@ import { RewardRule } from '../rewards/entities/reward-rule.entity';
 			Customer,
 			Product,
 			RewardRule,
+			RewardRuleProduct,
+			RewardRuleCategory,
 			StockMovement,
 		]),
 		AuthorizationGuardModule,

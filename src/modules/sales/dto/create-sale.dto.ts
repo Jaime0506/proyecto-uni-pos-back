@@ -110,6 +110,14 @@ export class CreateSaleDto {
 	claimBonus?: boolean;
 
 	@ApiPropertyOptional({
+		description:
+			'Monto exacto de saldo de bonos que el cliente desea redimir en esta compra',
+	})
+	@IsOptional()
+	@IsNumber()
+	redeemBonusAmount?: number;
+
+	@ApiPropertyOptional({
 		description: 'Método de pago utilizado',
 		enum: ['cash', 'transfer', 'qr', 'card'],
 		default: 'cash',

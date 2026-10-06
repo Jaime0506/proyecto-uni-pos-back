@@ -5,10 +5,11 @@ import { BonificationsService } from './bonifications.service';
 import { BonificationsController } from './bonifications.controller';
 import { Bonus } from './entities/bonification.entity';
 import { Customer } from '../sales/entities/customer.entity';
+import { BonusTransaction } from '../sales/entities/bonus-transactions.entity';
 
 @Module({
 	imports: [
-		TypeOrmModule.forFeature([Bonus, Customer]),
+		TypeOrmModule.forFeature([Bonus, Customer, BonusTransaction]),
 		AuthorizationGuardModule,
 	],
 	controllers: [BonificationsController],

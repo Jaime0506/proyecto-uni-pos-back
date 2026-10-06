@@ -84,4 +84,9 @@ export class RewardRule {
 		cascade: false,
 	})
 	products?: any[];
+
+	@OneToMany('RewardRuleCategory', 'rewardRule', {
+		cascade: false,
+	})
+	categories?: any[];
 }

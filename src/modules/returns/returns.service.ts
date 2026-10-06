@@ -83,7 +83,10 @@ export class ReturnsService {
 			throw new BadRequestException('La venta no pertenece a esta tienda.');
 		}
 
-		const policy = await this.getApplicablePolicy(sale.company_id, sale.store_id);
+		const policy = await this.getApplicablePolicy(
+			sale.company_id,
+			sale.store_id,
+		);
 		const maxDaysAllowed = policy?.maxDaysAllowed ?? 7;
 
 		const saleDate = new Date(sale.created_at);
@@ -292,8 +295,15 @@ export class ReturnsService {
 
 	// 4. Listar todas las devoluciones con filtros
 	async getAllReturns(dto: GetAllReturnsDto) {
-		const { companyId, storeId, status, startDate, endDate, search, customerId } =
-			dto;
+		const {
+			companyId,
+			storeId,
+			status,
+			startDate,
+			endDate,
+			search,
+			customerId,
+		} = dto;
 
 		const qb = this.returnRepository
 			.createQueryBuilder('sr')
@@ -382,7 +392,8 @@ export class ReturnsService {
 				);
 			}
 
-			const refundMethod = dto.refundMethod || returnRecord.refundMethod || 'CASH';
+			const refundMethod =
+				dto.refundMethod || returnRecord.refundMethod || 'CASH';
 
 			// Afectar inventario únicamente para ítems donde restockApproved sea true
 			for (const item of returnRecord.items) {
@@ -431,7 +442,9 @@ export class ReturnsService {
 					lock: { mode: 'pessimistic_write' },
 				});
 
-				const previousAmount = existingBonus ? Number(existingBonus.total_amount) : 0;
+				const previousAmount = existingBonus
+					? Number(existingBonus.total_amount)
+					: 0;
 				const refundTotal = Number(returnRecord.totalRefund);
 				const newAmount = previousAmount + refundTotal;
 

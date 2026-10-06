@@ -89,6 +89,8 @@ export class SalesService {
 				's.subtotal AS sale_subtotal',
 				's.tax_total AS sale_tax_total',
 				's.discount_total AS discount_total',
+				's.bonus_redeemed AS bonus_redeemed',
+				's.bonus_earned AS bonus_earned',
 				's.status AS sale_status',
 				's.payment_method AS sale_payment_method',
 				's.created_at AS sale_created_at',
@@ -136,6 +138,8 @@ export class SalesService {
 						: null,
 					items: [],
 					discount: row.discount_total,
+					bonusRedeemed: Number(row.bonus_redeemed || 0),
+					bonusEarned: Number(row.bonus_earned || 0),
 				});
 			}
 
@@ -343,14 +347,88 @@ export class SalesService {
 				createSaleDto.tax_total !== undefined
 					? Number(createSaleDto.tax_total)
 					: computedTaxTotal;
-			const discount = createSaleDto.discount_total || 0;
-			const bonusUsed = claimBonus ? discount : 0;
+
+			// 3. Validación y bloqueo de Redención de Bonos
+			const requestedRedeem = Math.max(
+				0,
+				createSaleDto.redeemBonusAmount !== undefined
+					? Number(createSaleDto.redeemBonusAmount)
+					: createSaleDto.claimBonus
+						? Number(createSaleDto.discount_total || 0)
+						: 0,
+			);
+
+			let effectiveBonusRedeemed = 0;
+			let bonusWalletRecord: Bonus | null = null;
+			let previousBonusBalance = 0;
+
+			if (createSaleDto.customerId && requestedRedeem > 0) {
+				// Bloqueo pesimista para garantizar consistencia y prevenir saldos negativos
+				bonusWalletRecord = await queryRunner.manager.findOne(Bonus, {
+					where: {
+						customer_id: createSaleDto.customerId,
+						company_id: createSaleDto.companyId,
+					},
+					lock: { mode: 'pessimistic_write' },
+				});
+
+				previousBonusBalance = bonusWalletRecord
+					? Number(bonusWalletRecord.total_amount)
+					: 0;
+
+				if (previousBonusBalance < requestedRedeem) {
+					throw new BadRequestException(
+						`Saldo de bonificaciones insuficiente. Saldo disponible: $${previousBonusBalance.toLocaleString('es-CO')}, solicitado a redimir: $${requestedRedeem.toLocaleString('es-CO')}.`,
+					);
+				}
+
+				effectiveBonusRedeemed = requestedRedeem;
+			}
+
+			// Descuento promocional de campaña (si la redención no fue enviada por el modo legacy)
+			const promoDiscount =
+				createSaleDto.redeemBonusAmount !== undefined
+					? Number(createSaleDto.discount_total || 0)
+					: createSaleDto.claimBonus
+						? 0
+						: Number(createSaleDto.discount_total || 0);
+
+			const payableBeforeBonus = Math.max(
+				0,
+				subtotalFinal + taxTotalFinal - promoDiscount,
+			);
+
+			if (effectiveBonusRedeemed > payableBeforeBonus) {
+				throw new BadRequestException(
+					`El monto a redimir ($${effectiveBonusRedeemed.toLocaleString('es-CO')}) no puede exceder el total a pagar de la compra ($${payableBeforeBonus.toLocaleString('es-CO')}).`,
+				);
+			}
+
 			const totalFinal =
 				createSaleDto.total !== undefined
 					? Number(createSaleDto.total)
-					: subtotalFinal + taxTotalFinal - bonusUsed;
+					: Math.max(0, payableBeforeBonus - effectiveBonusRedeemed);
 
-			// 3. Crear cabecera inmutable de venta
+			// 4. Cálculo Automático en Servidor de Bonos Ganados por Reglas Activas
+			const productsForBonus = createSaleDto.products.map((p) => {
+				const prod = productEntitiesMap.get(p.id)!;
+				const unitPrice = Number(p.unit_price);
+				return {
+					product: prod,
+					quantity: p.quantity,
+					unitPrice,
+					lineSubtotal: unitPrice * p.quantity,
+				};
+			});
+
+			const { bonusEarned, ruleDetails } = await this.calculateEarnedBonuses(
+				queryRunner,
+				Number(createSaleDto.companyId),
+				Number(createSaleDto.storeId),
+				productsForBonus,
+			);
+
+			// 5. Crear cabecera inmutable de venta
 			const sale = queryRunner.manager.create(Sale, {
 				company_id: createSaleDto.companyId,
 				store_id: createSaleDto.storeId,
@@ -359,9 +437,11 @@ export class SalesService {
 				campaign_id: createSaleDto.campaignId ?? undefined,
 				subtotal: subtotalFinal,
 				tax_total: taxTotalFinal,
-				discount_total: discount,
+				discount_total: promoDiscount,
+				bonus_redeemed: effectiveBonusRedeemed,
+				bonus_earned: bonusEarned,
 				total: totalFinal,
-				claim_bonus: claimBonus,
+				claim_bonus: effectiveBonusRedeemed > 0,
 				payment_method: createSaleDto.payment_method || 'cash',
 				status: 'completed',
 				channel: 'in_store',
@@ -369,7 +449,7 @@ export class SalesService {
 
 			const savedSale = await queryRunner.manager.save(Sale, sale);
 
-			// 4. Insertar los ítems con su relación sale_id
+			// 6. Insertar los ítems con su relación sale_id
 			const saleItems = saleItemsData.map((item) => ({
 				...item,
 				sale_id: savedSale.id,
@@ -377,7 +457,7 @@ export class SalesService {
 
 			await queryRunner.manager.insert(SaleItem, saleItems);
 
-			// 5. Actualizar stock de productos de forma atómica y registrar movimiento en Kardex
+			// 7. Actualizar stock de productos de forma atómica y registrar movimiento en Kardex
 			for (const product of createSaleDto.products) {
 				const productEntity = productEntitiesMap.get(product.id)!;
 				const previousStock = productEntity.stock;
@@ -399,60 +479,162 @@ export class SalesService {
 				await queryRunner.manager.save(StockMovement, movement);
 			}
 
-			// Proceso de bonificación
+			// 8. Proceso Atómico de Bonificaciones (Redención y/o Acumulación)
 			if (createSaleDto.customerId) {
-				// Buscar si ya existe una bonificación para este cliente en esta empresa y tienda
-				const existingBonus = await queryRunner.manager.findOne(Bonus, {
-					where: {
-						customer_id: createSaleDto.customerId,
-						company_id: createSaleDto.companyId,
-						store_id: createSaleDto.storeId,
-					},
-				});
+				let currentBalance = previousBonusBalance;
 
-				const previousAmount = existingBonus
-					? Number(existingBonus.total_amount)
-					: 0;
-				const amount = claimBonus ? -discount : discount;
-				const newAmount = previousAmount + amount;
+				// A. Registrar Redención si ocurrió
+				if (effectiveBonusRedeemed > 0) {
+					currentBalance -= effectiveBonusRedeemed;
 
-				if (existingBonus) {
-					// Actualizar la bonificación existente sumando el nuevo monto
-					existingBonus.total_amount = newAmount;
-					existingBonus.updated_at = new Date();
-					await queryRunner.manager.save(Bonus, existingBonus);
-				} else {
-					// Crear una nueva bonificación
-					const newBonus = queryRunner.manager.create(Bonus, {
-						customer_id: createSaleDto.customerId,
-						company_id: createSaleDto.companyId,
-						store_id: createSaleDto.storeId,
-						total_amount: newAmount,
-					});
-					await queryRunner.manager.save(Bonus, newBonus);
+					bonusWalletRecord!.total_amount = currentBalance;
+					bonusWalletRecord!.updated_at = new Date();
+					await queryRunner.manager.save(Bonus, bonusWalletRecord!);
+
+					const redeemTransaction = queryRunner.manager.create(
+						'bonus_transactions',
+						{
+							customer_id: createSaleDto.customerId,
+							sale_id: savedSale.id,
+							company_id: createSaleDto.companyId,
+							store_id: createSaleDto.storeId,
+							type: 'REDEEM',
+							amount: -effectiveBonusRedeemed,
+							previous_amount: previousBonusBalance,
+							new_amount: currentBalance,
+							notes: `Redención de bonos aplicada en Venta #${savedSale.id}`,
+						},
+					);
+					await queryRunner.manager.save('bonus_transactions', redeemTransaction);
 				}
 
-				// Registrar la transacción de bonificación
-				const bonusTransaction = queryRunner.manager.create(
-					'bonus_transactions',
-					{
-						customer_id: createSaleDto.customerId,
-						sale_id: savedSale.id,
-						company_id: createSaleDto.companyId,
-						store_id: createSaleDto.storeId,
-						amount,
-						previous_amount: previousAmount,
-						new_amount: newAmount,
-					},
-				);
-				await queryRunner.manager.save('bonus_transactions', bonusTransaction);
+				// B. Registrar Ganancia si acumuló bonos
+				if (bonusEarned > 0) {
+					const balanceBeforeEarn = currentBalance;
+					currentBalance += bonusEarned;
+
+					if (bonusWalletRecord) {
+						bonusWalletRecord.total_amount = currentBalance;
+						bonusWalletRecord.updated_at = new Date();
+						await queryRunner.manager.save(Bonus, bonusWalletRecord);
+					} else {
+						bonusWalletRecord = queryRunner.manager.create(Bonus, {
+							customer_id: createSaleDto.customerId,
+							company_id: createSaleDto.companyId,
+							store_id: createSaleDto.storeId,
+							total_amount: currentBalance,
+						});
+						await queryRunner.manager.save(Bonus, bonusWalletRecord);
+					}
+
+					const earnTransaction = queryRunner.manager.create(
+						'bonus_transactions',
+						{
+							customer_id: createSaleDto.customerId,
+							sale_id: savedSale.id,
+							company_id: createSaleDto.companyId,
+							store_id: createSaleDto.storeId,
+							type: 'EARN',
+							amount: bonusEarned,
+							previous_amount: balanceBeforeEarn,
+							new_amount: currentBalance,
+							notes: `Bonificación acumulada en Venta #${savedSale.id}${ruleDetails.length > 0 ? ': ' + ruleDetails.join('; ') : ''}`,
+						},
+					);
+					await queryRunner.manager.save('bonus_transactions', earnTransaction);
+				}
 			}
 
 			return {
 				message: 'Venta creada exitosamente',
 				sale: savedSale,
 				items: saleItems,
+				bonusRedeemed: effectiveBonusRedeemed,
+				bonusEarned,
 			};
 		});
+	}
+
+	/**
+	 * Motor de cálculo automático de bonos ganados según reglas de productos y categorías activas
+	 */
+	private async calculateEarnedBonuses(
+		queryRunner: any,
+		companyId: number,
+		storeId: number,
+		productsData: {
+			product: Product;
+			quantity: number;
+			unitPrice: number;
+			lineSubtotal: number;
+		}[],
+	): Promise<{ bonusEarned: number; ruleDetails: string[] }> {
+		const now = new Date();
+
+		const activeRules = await queryRunner.manager
+			.createQueryBuilder(RewardRule, 'rule')
+			.leftJoinAndSelect('rule.products', 'rp')
+			.leftJoinAndSelect('rule.categories', 'rc')
+			.where('rule.isActive = true')
+			.andWhere('rule.companyId = :companyId', { companyId })
+			.andWhere('(rule.storeId IS NULL OR rule.storeId = :storeId)', { storeId })
+			.andWhere('(rule.startsAt IS NULL OR rule.startsAt <= :now)', { now })
+			.andWhere('(rule.endsAt IS NULL OR rule.endsAt >= :now)', { now })
+			.getMany();
+
+		if (!activeRules || activeRules.length === 0) {
+			return { bonusEarned: 0, ruleDetails: [] };
+		}
+
+		let totalBonusEarned = 0;
+		const ruleDetails: string[] = [];
+
+		for (const item of productsData) {
+			let itemBonus = 0;
+
+			for (const rule of activeRules) {
+				// A. Regla por producto individual
+				const productRule = rule.products?.find(
+					(rp: any) => Number(rp.productId) === Number(item.product.id),
+				);
+				if (productRule && item.quantity >= (productRule.minQty || 1)) {
+					const effectiveQty = productRule.maxQty
+						? Math.min(item.quantity, productRule.maxQty)
+						: item.quantity;
+					const earned = Number(productRule.discountValue) * effectiveQty;
+					itemBonus += earned;
+					ruleDetails.push(
+						`Regla "${rule.title}": $${earned} (${effectiveQty} un. de ${item.product.name})`,
+					);
+				}
+
+				// B. Regla por categoría
+				if (item.product.categoryId) {
+					const categoryRule = rule.categories?.find(
+						(rc: any) => Number(rc.categoryId) === Number(item.product.categoryId),
+					);
+					if (categoryRule && item.quantity >= (categoryRule.minQty || 1)) {
+						let catEarned = 0;
+						if (categoryRule.discountPercentage) {
+							catEarned =
+								(item.lineSubtotal * Number(categoryRule.discountPercentage)) / 100;
+						} else if (categoryRule.discountValue) {
+							catEarned = Number(categoryRule.discountValue) * item.quantity;
+						}
+						itemBonus += catEarned;
+						ruleDetails.push(
+							`Regla "${rule.title}" (Categoría): $${catEarned.toFixed(2)} (${item.product.name})`,
+						);
+					}
+				}
+			}
+
+			totalBonusEarned += itemBonus;
+		}
+
+		return {
+			bonusEarned: Math.round(totalBonusEarned * 100) / 100,
+			ruleDetails,
+		};
 	}
 }

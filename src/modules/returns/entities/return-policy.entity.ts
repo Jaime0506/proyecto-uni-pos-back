@@ -63,9 +63,17 @@ export class ReturnPolicy {
 	@Column({ type: 'boolean', default: true, name: 'is_active' })
 	isActive!: boolean;
 
-	@CreateDateColumn({ type: 'timestamptz', default: () => 'now()', name: 'created_at' })
+	@CreateDateColumn({
+		type: 'timestamptz',
+		default: () => 'now()',
+		name: 'created_at',
+	})
 	createdAt!: Date;
 
-	@UpdateDateColumn({ type: 'timestamptz', default: () => 'now()', name: 'updated_at' })
+	@UpdateDateColumn({
+		type: 'timestamptz',
+		default: () => 'now()',
+		name: 'updated_at',
+	})
 	updatedAt!: Date;
 }

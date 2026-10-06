@@ -11,7 +11,10 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { RewardsService } from './rewards.service';
 import { CreateRewardRuleDto } from './dto/create-reward-rule.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { PermissionGuard } from '../auth/authorization-guard';
+import {
+	PermissionGuard,
+	RequirePermissions,
+} from '../auth/authorization-guard';
 
 @ApiTags('Rewards')
 @ApiBearerAuth()
@@ -21,7 +24,7 @@ export class RewardsController {
 	constructor(private readonly rewardsService: RewardsService) {}
 
 	@Post('create')
-	// @RequirePermissions(['rewards:create'])
+	@RequirePermissions(['rewards:create'])
 	async createRewardRule(
 		@Body() createRewardRuleDto: CreateRewardRuleDto,
 		@Request() req: { user: { userId: string } },
@@ -34,7 +37,7 @@ export class RewardsController {
 	}
 
 	@Get('get-all')
-	// @RequirePermissions(['rewards:read'])
+	@RequirePermissions(['rewards:read'])
 	async getRewardRules(
 		@Query('companyId') companyId: string,
 		@Query('storeId') storeId: string,

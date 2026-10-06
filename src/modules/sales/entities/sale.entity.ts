@@ -52,6 +52,12 @@ export class Sale {
 	@Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
 	discount_total!: number;
 
+	@Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
+	bonus_redeemed!: number;
+
+	@Column({ type: 'numeric', precision: 18, scale: 4, default: 0 })
+	bonus_earned!: number;
+
 	@Column({ type: 'numeric', precision: 18, scale: 4 })
 	total!: number;
 

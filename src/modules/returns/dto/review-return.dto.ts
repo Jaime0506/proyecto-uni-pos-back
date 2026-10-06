@@ -18,12 +18,16 @@ export class ApproveReturnDto {
 }
 
 export class RejectReturnDto {
-	@ApiProperty({ description: 'Motivo formal y obligatorio del rechazo de la devolución' })
+	@ApiProperty({
+		description: 'Motivo formal y obligatorio del rechazo de la devolución',
+	})
 	@IsString()
 	@IsNotEmpty({ message: 'El motivo del rechazo es obligatorio.' })
 	rejectionReason!: string;
 
-	@ApiPropertyOptional({ description: 'Notas internas adicionales de la revisión' })
+	@ApiPropertyOptional({
+		description: 'Notas internas adicionales de la revisión',
+	})
 	@IsString()
 	@IsOptional()
 	reviewNotes?: string;

@@ -24,34 +24,51 @@ export class ReturnItemInputDto {
 	@IsNotEmpty()
 	productId!: number;
 
-	@ApiProperty({ description: 'Cantidad específica a devolver de este producto' })
+	@ApiProperty({
+		description: 'Cantidad específica a devolver de este producto',
+	})
 	@IsInt()
 	@IsPositive()
 	quantity!: number;
 
 	@ApiProperty({
 		description: 'Condición física del producto devuelto',
-		enum: ['SEALED_NEW', 'OPEN_BOX_GOOD', 'DEFECTIVE_FACTORY', 'DAMAGED_CUSTOMER'],
+		enum: [
+			'SEALED_NEW',
+			'OPEN_BOX_GOOD',
+			'DEFECTIVE_FACTORY',
+			'DAMAGED_CUSTOMER',
+		],
 	})
 	@IsString()
-	@IsIn(['SEALED_NEW', 'OPEN_BOX_GOOD', 'DEFECTIVE_FACTORY', 'DAMAGED_CUSTOMER'])
+	@IsIn([
+		'SEALED_NEW',
+		'OPEN_BOX_GOOD',
+		'DEFECTIVE_FACTORY',
+		'DAMAGED_CUSTOMER',
+	])
 	itemCondition!: string;
 
 	@ApiProperty({
-		description: 'Indica si el producto es apto para reingresar al inventario vendible',
+		description:
+			'Indica si el producto es apto para reingresar al inventario vendible',
 		default: true,
 	})
 	@IsBoolean()
 	restockApproved!: boolean;
 
-	@ApiPropertyOptional({ description: 'Motivo u observación específica de este producto' })
+	@ApiPropertyOptional({
+		description: 'Motivo u observación específica de este producto',
+	})
 	@IsString()
 	@IsOptional()
 	itemReason?: string;
 }
 
 export class CreateReturnRequestDto {
-	@ApiProperty({ description: 'ID de la venta a la cual pertenece la devolución' })
+	@ApiProperty({
+		description: 'ID de la venta a la cual pertenece la devolución',
+	})
 	@IsInt()
 	@IsNotEmpty()
 	saleId!: number;
@@ -82,7 +99,9 @@ export class CreateReturnRequestDto {
 	@IsIn(['CASH', 'BONUS'])
 	preferredRefundMethod!: 'CASH' | 'BONUS';
 
-	@ApiPropertyOptional({ description: 'Notas o comentarios manifestados por el cliente' })
+	@ApiPropertyOptional({
+		description: 'Notas o comentarios manifestados por el cliente',
+	})
 	@IsString()
 	@IsOptional()
 	customerNotes?: string;
@@ -92,7 +111,9 @@ export class CreateReturnRequestDto {
 		type: [ReturnItemInputDto],
 	})
 	@IsArray()
-	@ArrayMinSize(1, { message: 'Debe seleccionar al menos un producto para la devolución.' })
+	@ArrayMinSize(1, {
+		message: 'Debe seleccionar al menos un producto para la devolución.',
+	})
 	@ValidateNested({ each: true })
 	@Type(() => ReturnItemInputDto)
 	items!: ReturnItemInputDto[];
