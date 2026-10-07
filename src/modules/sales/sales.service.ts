@@ -483,24 +483,40 @@ export class SalesService {
 					? Number(createSaleDto.total)
 					: calculatedTotalFinal;
 
-			// 4. Cálculo Automático en Servidor de Bonos Ganados por Reglas Activas
-			const productsForBonus = createSaleDto.products.map((p) => {
-				const prod = productEntitiesMap.get(p.id)!;
-				const unitPrice = Number(p.unit_price);
-				return {
-					product: prod,
-					quantity: p.quantity,
-					unitPrice,
-					lineSubtotal: unitPrice * p.quantity,
-				};
-			});
+			// 4. Cálculo de Bonos Ganados
+			let bonusEarned = 0;
+			let ruleDetails: string[] = [];
 
-			const { bonusEarned, ruleDetails } = await this.calculateEarnedBonuses(
-				queryRunner,
-				Number(createSaleDto.companyId),
-				Number(createSaleDto.storeId),
-				productsForBonus,
-			);
+			// REGLAS ESTRICTAS DE NEGOCIO:
+			// A. Si se redimen bonos en esta venta (effectiveBonusRedeemed > 0), NO se permite acumular nuevos bonos en la misma transacción.
+			// B. Solo se calculan y acumulan bonos si el cajero seleccionó explícitamente una campaña activa (createSaleDto.campaignId).
+			// C. Debe existir un cliente registrado para acumular bonos.
+			if (
+				createSaleDto.campaignId &&
+				effectiveBonusRedeemed === 0 &&
+				createSaleDto.customerId
+			) {
+				const productsForBonus = createSaleDto.products.map((p) => {
+					const prod = productEntitiesMap.get(p.id)!;
+					const unitPrice = Number(p.unit_price);
+					return {
+						product: prod,
+						quantity: p.quantity,
+						unitPrice,
+						lineSubtotal: unitPrice * p.quantity,
+					};
+				});
+
+				const result = await this.calculateEarnedBonuses(
+					queryRunner,
+					Number(createSaleDto.companyId),
+					Number(createSaleDto.storeId),
+					Number(createSaleDto.campaignId),
+					productsForBonus,
+				);
+				bonusEarned = result.bonusEarned;
+				ruleDetails = result.ruleDetails;
+			}
 
 			// 5. Crear cabecera inmutable de venta
 			const sale = queryRunner.manager.create(Sale, {
@@ -508,7 +524,7 @@ export class SalesService {
 				store_id: createSaleDto.storeId,
 				user_id: userId,
 				customer_id: createSaleDto.customerId ?? undefined,
-				campaign_id: createSaleDto.campaignId ?? undefined,
+				campaign_id: effectiveBonusRedeemed > 0 ? undefined : (createSaleDto.campaignId ?? undefined),
 				subtotal: subtotalFinal,
 				tax_total: taxTotalFinal,
 				discount_total: promoDiscount,
@@ -636,12 +652,13 @@ export class SalesService {
 	}
 
 	/**
-	 * Motor de cálculo automático de bonos ganados según reglas de productos y categorías activas
+	 * Motor de cálculo de bonos ganados según la campaña activa seleccionada
 	 */
 	private async calculateEarnedBonuses(
 		queryRunner: any,
 		companyId: number,
 		storeId: number,
+		campaignId: number,
 		productsData: {
 			product: Product;
 			quantity: number;
@@ -655,7 +672,8 @@ export class SalesService {
 			.createQueryBuilder(RewardRule, 'rule')
 			.leftJoinAndSelect('rule.products', 'rp')
 			.leftJoinAndSelect('rule.categories', 'rc')
-			.where('rule.isActive = true')
+			.where('rule.id = :campaignId', { campaignId })
+			.andWhere('rule.isActive = true')
 			.andWhere('rule.companyId = :companyId', { companyId })
 			.andWhere('(rule.storeId IS NULL OR rule.storeId = :storeId)', { storeId })
 			.andWhere('(rule.startsAt IS NULL OR rule.startsAt <= :now)', { now })
