@@ -1,4 +1,4 @@
-import { IsInt, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -12,16 +12,31 @@ export class CreateRewardRuleProductDto {
 	@Type(() => Number)
 	productId: number;
 
-	@ApiProperty({
-		description: 'Valor del descuento a aplicar al producto',
+	@ApiPropertyOptional({
+		description:
+			'Porcentaje de bonificación sobre el producto (ej: 5 para 5%)',
+		example: 5.0,
+		type: 'number',
+		minimum: 0,
+		maximum: 100,
+	})
+	@IsOptional()
+	@IsNumber({ maxDecimalPlaces: 2 })
+	@Min(0)
+	@Type(() => Number)
+	discountPercentage?: number | null;
+
+	@ApiPropertyOptional({
+		description: 'Valor fijo nominal de bonificación a aplicar al producto',
 		example: 10.5,
 		type: 'number',
 		minimum: 0,
 	})
+	@IsOptional()
 	@IsNumber({ maxDecimalPlaces: 4 })
 	@Min(0)
 	@Type(() => Number)
-	discountValue: number;
+	discountValue?: number | null;
 
 	@ApiProperty({
 		description:

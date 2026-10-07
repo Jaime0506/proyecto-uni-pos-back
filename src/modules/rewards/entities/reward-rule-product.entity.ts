@@ -22,7 +22,10 @@ const numericToNumber = {
 @Unique('ux_reward_rule_product_unique', ['rewardRuleId', 'productId'])
 @Index('ix_reward_rule_products_product_id', ['productId'])
 @Index('ix_reward_rule_products_reward_rule_id', ['rewardRuleId'])
-@Check('chk_rrp_discount_nonneg', '"discount_value" >= 0')
+@Check(
+	'chk_rrp_discount_nonneg',
+	'(discount_percentage IS NULL OR discount_percentage >= 0) AND (discount_value IS NULL OR discount_value >= 0)',
+)
 export class RewardRuleProduct {
 	@PrimaryGeneratedColumn()
 	id: number;
@@ -42,13 +45,24 @@ export class RewardRuleProduct {
 	product: Product;
 
 	@Column({
+		name: 'discount_percentage',
+		type: 'numeric',
+		precision: 5,
+		scale: 2,
+		nullable: true,
+		transformer: numericToNumber,
+	})
+	discountPercentage?: number | null;
+
+	@Column({
 		name: 'discount_value',
 		type: 'numeric',
 		precision: 12,
 		scale: 4,
+		nullable: true,
 		transformer: numericToNumber,
 	})
-	discountValue: number;
+	discountValue?: number | null;
 
 	@Column({ name: 'min_qty', type: 'int', default: 1 })
 	minQty: number;

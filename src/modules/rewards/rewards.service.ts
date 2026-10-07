@@ -37,8 +37,21 @@ export class RewardsService {
 			);
 		}
 
-		// Validar que todos los productos existan si se proporcionaron
+		// Validar que todos los productos existan y tengan configuración válida si se proporcionaron
 		if (products && products.length > 0) {
+			for (const p of products) {
+				if (!p.discountPercentage && !p.discountValue) {
+					throw new BadRequestException(
+						`El producto ID ${p.productId} debe tener un porcentaje o valor fijo de bonificación definido.`,
+					);
+				}
+				if (p.maxQty && p.minQty > p.maxQty) {
+					throw new BadRequestException(
+						`En el producto ID ${p.productId}, la cantidad mínima (${p.minQty}) no puede ser mayor a la cantidad máxima (${p.maxQty}).`,
+					);
+				}
+			}
+
 			const productIds = products.map((p) => p.productId);
 			const existingProducts = await this.productRepository.find({
 				where: productIds.map((id) => ({ id })),
@@ -53,8 +66,21 @@ export class RewardsService {
 			}
 		}
 
-		// Validar que todas las categorías existan si se proporcionaron
+		// Validar que todas las categorías existan y tengan configuración válida si se proporcionaron
 		if (categories && categories.length > 0) {
+			for (const c of categories) {
+				if (!c.discountPercentage && !c.discountValue) {
+					throw new BadRequestException(
+						`La categoría ID ${c.categoryId} debe tener un porcentaje o valor fijo de bonificación definido.`,
+					);
+				}
+				if (c.maxQty && c.minQty > c.maxQty) {
+					throw new BadRequestException(
+						`En la categoría ID ${c.categoryId}, la cantidad mínima (${c.minQty}) no puede ser mayor a la cantidad máxima (${c.maxQty}).`,
+					);
+				}
+			}
+
 			const categoryIds = categories.map((c) => c.categoryId);
 			const existingCategories = await this.categoryRepository.find({
 				where: categoryIds.map((id) => ({ id })),

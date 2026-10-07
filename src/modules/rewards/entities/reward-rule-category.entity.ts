@@ -67,6 +67,9 @@ export class RewardRuleCategory {
 	@Column({ name: 'min_qty', type: 'int', default: 1 })
 	minQty: number;
 
+	@Column({ name: 'max_qty', type: 'int', nullable: true })
+	maxQty?: number | null;
+
 	@CreateDateColumn({
 		type: 'timestamptz',
 		name: 'created_at',

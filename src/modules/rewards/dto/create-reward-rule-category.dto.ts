@@ -51,4 +51,17 @@ export class CreateRewardRuleCategoryDto {
 	@Min(1)
 	@Type(() => Number)
 	minQty: number = 1;
+
+	@ApiPropertyOptional({
+		description:
+			'Cantidad máxima de productos de la categoría para aplicar la bonificación (null = sin límite)',
+		example: 10,
+		type: 'integer',
+		minimum: 1,
+	})
+	@IsOptional()
+	@IsInt()
+	@Min(1)
+	@Type(() => Number)
+	maxQty?: number | null;
 }

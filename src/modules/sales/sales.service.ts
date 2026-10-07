@@ -601,10 +601,16 @@ export class SalesService {
 					const effectiveQty = productRule.maxQty
 						? Math.min(item.quantity, productRule.maxQty)
 						: item.quantity;
-					const earned = Number(productRule.discountValue) * effectiveQty;
+					let earned = 0;
+					if (productRule.discountPercentage != null && Number(productRule.discountPercentage) > 0) {
+						earned =
+							(Number(item.unitPrice) * effectiveQty * Number(productRule.discountPercentage)) / 100;
+					} else if (productRule.discountValue != null) {
+						earned = Number(productRule.discountValue) * effectiveQty;
+					}
 					itemBonus += earned;
 					ruleDetails.push(
-						`Regla "${rule.title}": $${earned} (${effectiveQty} un. de ${item.product.name})`,
+						`Regla "${rule.title}": $${earned.toFixed(2)} (${effectiveQty} un. de ${item.product.name})`,
 					);
 				}
 
@@ -614,16 +620,19 @@ export class SalesService {
 						(rc: any) => Number(rc.categoryId) === Number(item.product.categoryId),
 					);
 					if (categoryRule && item.quantity >= (categoryRule.minQty || 1)) {
+						const effectiveQty = categoryRule.maxQty
+							? Math.min(item.quantity, categoryRule.maxQty)
+							: item.quantity;
 						let catEarned = 0;
-						if (categoryRule.discountPercentage) {
+						if (categoryRule.discountPercentage != null && Number(categoryRule.discountPercentage) > 0) {
 							catEarned =
-								(item.lineSubtotal * Number(categoryRule.discountPercentage)) / 100;
-						} else if (categoryRule.discountValue) {
-							catEarned = Number(categoryRule.discountValue) * item.quantity;
+								(Number(item.unitPrice) * effectiveQty * Number(categoryRule.discountPercentage)) / 100;
+						} else if (categoryRule.discountValue != null) {
+							catEarned = Number(categoryRule.discountValue) * effectiveQty;
 						}
 						itemBonus += catEarned;
 						ruleDetails.push(
-							`Regla "${rule.title}" (Categoría): $${catEarned.toFixed(2)} (${item.product.name})`,
+							`Regla "${rule.title}" (Categoría): $${catEarned.toFixed(2)} (${effectiveQty} un. de ${item.product.name})`,
 						);
 					}
 				}
