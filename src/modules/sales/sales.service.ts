@@ -164,54 +164,118 @@ export class SalesService {
 	}
 
 	async getAllCustomers(companyId: number, storeId: number) {
-		const whereClause: any = {};
+		const qb = this.customerRepository
+			.createQueryBuilder('c')
+			.leftJoin(Bonus, 'b', 'b.customer_id = c.id')
+			.select([
+				'c.id AS id',
+				'c.company_id AS "companyId"',
+				'c.store_id AS "storeId"',
+				'c.national_id AS "nationalId"',
+				'c.first_name AS "firstName"',
+				'c.last_name AS "lastName"',
+				'c.phone AS phone',
+				'c.email AS email',
+				'c.status AS status',
+				'COALESCE(b.total_amount, 0) AS "bonusBalance"',
+			])
+			.where('c.deleted_at IS NULL');
+
 		if (companyId !== undefined) {
-			whereClause.companyId = companyId;
+			qb.andWhere('c.company_id = :companyId', { companyId });
 		}
 		if (storeId !== undefined) {
-			whereClause.storeId = storeId;
+			qb.andWhere('(c.store_id = :storeId OR c.store_id IS NULL)', { storeId });
 		}
-		return await this.customerRepository.find({
-			where: whereClause,
-		});
+
+		qb.orderBy('c.first_name', 'ASC');
+
+		const rows = await qb.getRawMany();
+
+		return rows.map((row) => ({
+			id: Number(row.id),
+			companyId: Number(row.companyId),
+			storeId: row.storeId ? Number(row.storeId) : null,
+			nationalId: row.nationalId,
+			firstName: row.firstName ?? undefined,
+			lastName: row.lastName ?? undefined,
+			phone: row.phone ?? undefined,
+			email: row.email ?? undefined,
+			status: row.status,
+			bonusBalance: Number(row.bonusBalance || 0),
+		}));
 	}
 
-	// Buscar cliente por cédula exacta dentro de la empresa y tienda
+	// Buscar cliente por cédula exacta dentro de la empresa y tienda, enriquecido con saldo de bonos
 	async searchCustomerByNationalId(
 		nationalId: string,
 		companyId: number,
 		storeId: number,
-	): Promise<Customer[]> {
+	): Promise<any[]> {
 		if (!nationalId || nationalId.trim().length < 6) {
 			throw new BadRequestException(
 				'La cédula debe tener al menos 6 caracteres para realizar la búsqueda.',
 			);
 		}
 
-		return this.customerRepository.find({
-			where: {
-				nationalId: nationalId.trim(),
-				companyId,
-				storeId,
-			},
-			take: 5,
-		});
+		const qb = this.customerRepository
+			.createQueryBuilder('c')
+			.leftJoin(Bonus, 'b', 'b.customer_id = c.id')
+			.select([
+				'c.id AS id',
+				'c.company_id AS "companyId"',
+				'c.store_id AS "storeId"',
+				'c.national_id AS "nationalId"',
+				'c.first_name AS "firstName"',
+				'c.last_name AS "lastName"',
+				'c.phone AS phone',
+				'c.email AS email',
+				'c.status AS status',
+				'COALESCE(b.total_amount, 0) AS "bonusBalance"',
+			])
+			.where('c.national_id = :nationalId', { nationalId: nationalId.trim() })
+			.andWhere('c.deleted_at IS NULL');
+
+		if (companyId) {
+			qb.andWhere('c.company_id = :companyId', { companyId });
+		}
+
+		if (storeId) {
+			qb.orderBy('CASE WHEN c.store_id = :storeId THEN 1 ELSE 2 END', 'ASC');
+			qb.setParameter('storeId', storeId);
+		}
+
+		qb.take(5);
+
+		const rows = await qb.getRawMany();
+
+		return rows.map((row) => ({
+			id: Number(row.id),
+			companyId: Number(row.companyId),
+			storeId: row.storeId ? Number(row.storeId) : null,
+			nationalId: row.nationalId,
+			firstName: row.firstName ?? undefined,
+			lastName: row.lastName ?? undefined,
+			phone: row.phone ?? undefined,
+			email: row.email ?? undefined,
+			status: row.status,
+			bonusBalance: Number(row.bonusBalance || 0),
+		}));
 	}
 
 	// Crear un nuevo cliente en la empresa y tienda indicadas
-	async createCustomer(dto: CreateCustomerDto): Promise<Customer> {
+	async createCustomer(dto: CreateCustomerDto): Promise<any> {
 		// Verificar que no exista un cliente con la misma cédula en esta empresa
 		const existing = await this.customerRepository.findOne({
 			where: {
 				nationalId: dto.nationalId.trim(),
 				companyId: Number(dto.companyId),
-				storeId: Number(dto.storeId),
 			},
 		});
 
 		if (existing) {
 			throw new ConflictException(
-				`Ya existe un cliente con la cédula ${dto.nationalId} en esta tienda.`,
+				`Ya existe un cliente con la cédula ${dto.nationalId} en esta empresa.`,
 			);
 		}
 
@@ -225,7 +289,11 @@ export class SalesService {
 			email: dto.email?.trim(),
 		});
 
-		return this.customerRepository.save(customer);
+		const saved = await this.customerRepository.save(customer);
+		return {
+			...saved,
+			bonusBalance: 0,
+		};
 	}
 
 	async createSale(createSaleDto: CreateSaleDto, userId: string) {
@@ -362,12 +430,11 @@ export class SalesService {
 			let bonusWalletRecord: Bonus | null = null;
 			let previousBonusBalance = 0;
 
-			if (createSaleDto.customerId && requestedRedeem > 0) {
+			if (createSaleDto.customerId) {
 				// Bloqueo pesimista para garantizar consistencia y prevenir saldos negativos
 				bonusWalletRecord = await queryRunner.manager.findOne(Bonus, {
 					where: {
 						customer_id: createSaleDto.customerId,
-						company_id: createSaleDto.companyId,
 					},
 					lock: { mode: 'pessimistic_write' },
 				});
@@ -376,13 +443,14 @@ export class SalesService {
 					? Number(bonusWalletRecord.total_amount)
 					: 0;
 
-				if (previousBonusBalance < requestedRedeem) {
-					throw new BadRequestException(
-						`Saldo de bonificaciones insuficiente. Saldo disponible: $${previousBonusBalance.toLocaleString('es-CO')}, solicitado a redimir: $${requestedRedeem.toLocaleString('es-CO')}.`,
-					);
+				if (requestedRedeem > 0) {
+					if (previousBonusBalance < requestedRedeem) {
+						throw new BadRequestException(
+							`Saldo de bonificaciones insuficiente. Saldo disponible: $${previousBonusBalance.toLocaleString('es-CO')}, solicitado a redimir: $${requestedRedeem.toLocaleString('es-CO')}.`,
+						);
+					}
+					effectiveBonusRedeemed = requestedRedeem;
 				}
-
-				effectiveBonusRedeemed = requestedRedeem;
 			}
 
 			// Descuento promocional de campaña (si la redención no fue enviada por el modo legacy)
@@ -522,6 +590,12 @@ export class SalesService {
 					if (bonusWalletRecord) {
 						bonusWalletRecord.total_amount = currentBalance;
 						bonusWalletRecord.updated_at = new Date();
+						if (!bonusWalletRecord.company_id) {
+							bonusWalletRecord.company_id = createSaleDto.companyId;
+						}
+						if (!bonusWalletRecord.store_id) {
+							bonusWalletRecord.store_id = createSaleDto.storeId;
+						}
 						await queryRunner.manager.save(Bonus, bonusWalletRecord);
 					} else {
 						bonusWalletRecord = queryRunner.manager.create(Bonus, {
