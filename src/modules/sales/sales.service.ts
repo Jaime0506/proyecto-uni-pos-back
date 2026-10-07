@@ -404,10 +404,16 @@ export class SalesService {
 				);
 			}
 
+			const calculatedTotalFinal = Math.max(
+				0,
+				payableBeforeBonus - effectiveBonusRedeemed,
+			);
+
 			const totalFinal =
-				createSaleDto.total !== undefined
+				createSaleDto.total !== undefined &&
+				Number(createSaleDto.total) <= calculatedTotalFinal
 					? Number(createSaleDto.total)
-					: Math.max(0, payableBeforeBonus - effectiveBonusRedeemed);
+					: calculatedTotalFinal;
 
 			// 4. Cálculo Automático en Servidor de Bonos Ganados por Reglas Activas
 			const productsForBonus = createSaleDto.products.map((p) => {

@@ -57,6 +57,8 @@ export interface CustomerPurchase {
 	subtotal: number;
 	taxTotal?: number;
 	discountTotal: number;
+	bonusRedeemed?: number;
+	bonusEarned?: number;
 	claimBonus: boolean;
 	status: string;
 	channel: string;
@@ -267,6 +269,8 @@ export class CustomerPortalService {
 					s.subtotal        AS subtotal,
 					s.tax_total       AS tax_total,
 					s.discount_total  AS discount_total,
+					s.bonus_redeemed  AS bonus_redeemed,
+					s.bonus_earned    AS bonus_earned,
 					s.status          AS status,
 					s.channel         AS channel,
 					s.claim_bonus     AS claim_bonus,
@@ -303,7 +307,9 @@ export class CustomerPortalService {
 						total: Number(row.total),
 						subtotal: Number(row.subtotal),
 						taxTotal: Number(row.tax_total || 0),
-						discountTotal: Number(row.discount_total),
+						discountTotal: Number(row.discount_total || 0),
+						bonusRedeemed: Number(row.bonus_redeemed || 0),
+						bonusEarned: Number(row.bonus_earned || 0),
 						claimBonus: Boolean(row.claim_bonus),
 						status: row.status,
 						channel: row.channel,
