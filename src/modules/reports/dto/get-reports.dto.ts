@@ -21,6 +21,12 @@ export class GetReportsDto {
 	@IsInt()
 	storeId!: number;
 
+	@ApiPropertyOptional({ description: 'ID del proveedor' })
+	@IsOptional()
+	@Type(() => Number)
+	@IsInt()
+	supplierId?: number;
+
 	@ApiPropertyOptional({ description: 'Fecha de inicio (YYYY-MM-DD)' })
 	@IsOptional()
 	@IsDateString()

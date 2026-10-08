@@ -1,4 +1,4 @@
-import { IsInt, IsNumber, IsOptional, Min, Max } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -13,8 +13,7 @@ export class CreateRewardRuleProductDto {
 	productId: number;
 
 	@ApiPropertyOptional({
-		description:
-			'Porcentaje de bonificación sobre el producto (ej: 5 para 5%)',
+		description: 'Porcentaje de bonificación sobre el producto (ej: 5 para 5%)',
 		example: 5.0,
 		type: 'number',
 		minimum: 0,

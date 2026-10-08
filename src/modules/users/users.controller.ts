@@ -21,6 +21,7 @@ import { DeleteDto } from './dtos/delete.dto';
 import { ActivateUserDto } from './dtos/activate-user.dto';
 import { CreateUserWithRoleDto } from './dtos/create-user-with-role.dto';
 import { UpdateUserWithRoleDto } from './dtos/update-user-with-role.dto';
+import { AdminResetPasswordDto } from './dtos/admin-reset-password.dto';
 import { RequestUser } from 'src/types/global';
 import {
 	PermissionGuard,
@@ -117,6 +118,20 @@ export class UsersController {
 	}
 
 	@ApiTags('Users - Admin')
+	@Patch('admin/reset-password')
+	@RequirePermissions(['user_admin:update'])
+	@CacheInvalidate({
+		keys: ['users:all'],
+	})
+	@HttpCode(200)
+	async adminResetPassword(
+		@Body() dto: AdminResetPasswordDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.adminResetPassword(dto, req.user);
+	}
+
+	@ApiTags('Users - Admin')
 	@Patch('admin/activate-user')
 	@RequirePermissions(['user_admin:update'])
 	@CacheInvalidate({
@@ -185,6 +200,17 @@ export class UsersController {
 		@Req() req: Request & { user: RequestUser },
 	) {
 		return await this.users.updateStoreUserWithRole(dto, req.user.userId);
+	}
+
+	@ApiTags('Users - Store Admin')
+	@Patch('store/reset-password')
+	@RequirePermissions(['user:update'])
+	@HttpCode(200)
+	async storeResetPassword(
+		@Body() dto: AdminResetPasswordDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.users.storeResetPassword(dto, req.user);
 	}
 
 	@ApiTags('Users - Store Admin')

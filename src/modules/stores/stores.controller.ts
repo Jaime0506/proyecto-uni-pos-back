@@ -6,6 +6,7 @@ import {
 	HttpCode,
 	Patch,
 	Post,
+	Req,
 	UseGuards,
 } from '@nestjs/common';
 import { StoresService } from './stores.service';
@@ -18,10 +19,8 @@ import {
 	PermissionGuard,
 	RequirePermissions,
 } from '../auth/authorization-guard';
-
-import { Request } from 'express';
+import type { Request } from 'express';
 import { RequestUser } from 'src/types/global';
-import { Req } from '@nestjs/common';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -35,6 +34,7 @@ export class StoresController {
 	@RequirePermissions({
 		anyOf: [
 			'store:read',
+			'store_admin:read',
 			'user:create',
 			'user:update',
 			'user:read',
@@ -44,42 +44,59 @@ export class StoresController {
 	})
 	@HttpCode(200)
 	async getCompanyStores(@Req() req: Request & { user: RequestUser }) {
-		return await this.storesService.getCompanyStores(req.user.userId);
+		return await this.storesService.getCompanyStores(req.user);
 	}
 
-	// Obtener todas las tiendas (incluyendo desactivadas)
+	// Obtener todas las tiendas (respetando aislamiento por compañía a menos que tenga store_admin:read)
 	@Get('get-all')
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['store:read'])
+	@RequirePermissions({
+		anyOf: ['store:read', 'store_admin:read'],
+	})
 	@HttpCode(200)
-	async getAllStores() {
-		return await this.storesService.getAllStores();
+	async getAllStores(@Req() req: Request & { user: RequestUser }) {
+		return await this.storesService.getAllStores(req.user);
 	}
 
 	// Crear una nueva tienda
 	@Post('create')
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['store:create'])
+	@RequirePermissions({
+		anyOf: ['store:create', 'store_admin:create'],
+	})
 	@HttpCode(200)
-	async createStore(@Body() dto: CreateStoreDto) {
-		return await this.storesService.createStore(dto);
+	async createStore(
+		@Body() dto: CreateStoreDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.storesService.createStore(dto, req.user);
 	}
 
 	// Actualizar una tienda
 	@Patch('update')
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['store:update'])
+	@RequirePermissions({
+		anyOf: ['store:update', 'store_admin:update'],
+	})
 	@HttpCode(200)
-	async updateStore(@Body() dto: UpdateStoreDto) {
-		return await this.storesService.updateStore(dto);
+	async updateStore(
+		@Body() dto: UpdateStoreDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.storesService.updateStore(dto, req.user);
 	}
 
 	// Eliminar una tienda (soft delete)
 	@Delete('delete')
 	@UseGuards(PermissionGuard)
-	@RequirePermissions(['store:delete'])
+	@RequirePermissions({
+		anyOf: ['store:delete', 'store_admin:delete'],
+	})
 	@HttpCode(200)
-	async deleteStore(@Body() dto: DeleteStoreDto) {
-		return await this.storesService.deleteStore(dto);
+	async deleteStore(
+		@Body() dto: DeleteStoreDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.storesService.deleteStore(dto, req.user);
 	}
 }

@@ -127,4 +127,58 @@ export class ReportsController {
 		);
 		res.send(csvData);
 	}
+
+	// 5. COMPRAS POR PROVEEDOR
+	@RequirePermissions(['report:read'])
+	@Get('purchases')
+	@ApiOperation({ summary: 'Reporte de compras por proveedor (Paginado)' })
+	async getPurchasesReport(@Query() getReportsDto: GetReportsDto) {
+		return await this.reportsService.getPurchasesReport(getReportsDto);
+	}
+
+	@RequirePermissions(['report:read'])
+	@Get('purchases/export')
+	@ApiOperation({ summary: 'Exportar reporte de compras por proveedor a CSV' })
+	async exportPurchasesReport(
+		@Query() getReportsDto: GetReportsDto,
+		@Res() res: Response,
+	) {
+		const csvData =
+			await this.reportsService.exportPurchasesReport(getReportsDto);
+		res.setHeader('Content-Type', 'text/csv');
+		res.setHeader(
+			'Content-Disposition',
+			'attachment; filename=compras_proveedores.csv',
+		);
+		res.send(csvData);
+	}
+
+	// 6. PRODUCTOS SUMINISTRADOS POR PROVEEDOR
+	@RequirePermissions(['report:read'])
+	@Get('supplier-products')
+	@ApiOperation({
+		summary: 'Reporte de productos suministrados por proveedor (Paginado)',
+	})
+	async getSupplierProductsReport(@Query() getReportsDto: GetReportsDto) {
+		return await this.reportsService.getSupplierProductsReport(getReportsDto);
+	}
+
+	@RequirePermissions(['report:read'])
+	@Get('supplier-products/export')
+	@ApiOperation({
+		summary: 'Exportar reporte de productos suministrados a CSV',
+	})
+	async exportSupplierProductsReport(
+		@Query() getReportsDto: GetReportsDto,
+		@Res() res: Response,
+	) {
+		const csvData =
+			await this.reportsService.exportSupplierProductsReport(getReportsDto);
+		res.setHeader('Content-Type', 'text/csv');
+		res.setHeader(
+			'Content-Disposition',
+			'attachment; filename=productos_suministrados.csv',
+		);
+		res.send(csvData);
+	}
 }

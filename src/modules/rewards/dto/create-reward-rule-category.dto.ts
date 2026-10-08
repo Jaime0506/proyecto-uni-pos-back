@@ -28,7 +28,8 @@ export class CreateRewardRuleCategoryDto {
 	discountPercentage?: number | null;
 
 	@ApiPropertyOptional({
-		description: 'Valor fijo nominal de bonificación por unidad vendida de la categoría',
+		description:
+			'Valor fijo nominal de bonificación por unidad vendida de la categoría',
 		example: 500,
 		type: 'number',
 		minimum: 0,

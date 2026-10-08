@@ -20,6 +20,13 @@ export class CreateSupplierDto {
 	@IsString()
 	name!: string;
 
+	@ApiPropertyOptional({
+		description: 'El NIT o documento tributario del proveedor',
+	})
+	@IsOptional()
+	@IsString()
+	nit?: string;
+
 	@ApiPropertyOptional({ description: 'El nombre de contacto del proveedor' })
 	@IsOptional()
 	@IsString()

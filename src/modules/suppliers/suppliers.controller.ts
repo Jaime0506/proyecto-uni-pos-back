@@ -6,6 +6,7 @@ import {
 	HttpCode,
 	Patch,
 	Post,
+	Query,
 	UseGuards,
 } from '@nestjs/common';
 import { SuppliersService } from './suppliers.service';
@@ -25,13 +26,15 @@ import {
 export class SuppliersController {
 	constructor(private readonly suppliersService: SuppliersService) {}
 
-	// Obtener todos los proveedores (incluyendo desactivados)
+	// Obtener todos los proveedores por compañía (o todos si es admin)
 	@Get('get-all')
 	@UseGuards(PermissionGuard)
 	@RequirePermissions(['supplier:read'])
 	@HttpCode(200)
-	async getAllSuppliers() {
-		return await this.suppliersService.getAllSuppliers();
+	async getAllSuppliers(@Query('companyId') companyId?: string) {
+		return await this.suppliersService.getAllSuppliers(
+			companyId ? Number(companyId) : undefined,
+		);
 	}
 
 	// Crear un nuevo proveedor

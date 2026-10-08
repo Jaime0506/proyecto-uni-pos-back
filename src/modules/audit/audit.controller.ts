@@ -25,7 +25,7 @@ export class AuditController {
 
 	@ApiTags('Audit - Admin')
 	@Get('admin/logs')
-	@RequirePermissions(['user_admin:read'])
+	@RequirePermissions(['audit:read'])
 	@HttpCode(200)
 	async getAdminLogs(@Query() query: QueryAuditLogsDto) {
 		return await this.auditService.getAdminLogs(query);
@@ -33,7 +33,7 @@ export class AuditController {
 
 	@ApiTags('Audit - Store')
 	@Get('store/logs')
-	@RequirePermissions(['user:read'])
+	@RequirePermissions(['audit:read'])
 	@HttpCode(200)
 	async getStoreLogs(
 		@Query() query: QueryAuditLogsDto,

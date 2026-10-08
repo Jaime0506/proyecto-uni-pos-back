@@ -13,6 +13,7 @@ import { Bonus } from './entities/bonuses.entity';
 import { Product } from '../products/entities/product.entity';
 import { StockMovement } from '../products/entities/stock-movement.entity';
 import { RewardRule } from '../rewards/entities/reward-rule.entity';
+import { Store } from '../stores/entities/store.entity';
 import { processTransaction } from 'src/database/transactions';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { CreateSaleDto } from './dto/create-sale.dto';
@@ -351,6 +352,21 @@ export class SalesService {
 				}
 			}
 
+			// 0.1 Obtener la tienda para determinar la tasa de IVA configurada
+			let storeIvaPercentage = 19;
+			if (createSaleDto.storeId) {
+				const store = await queryRunner.manager.findOne(Store, {
+					where: { id: createSaleDto.storeId },
+				});
+				if (
+					store &&
+					store.ivaPercentage !== undefined &&
+					store.ivaPercentage !== null
+				) {
+					storeIvaPercentage = Number(store.ivaPercentage);
+				}
+			}
+
 			// 1. Obtener y validar entidades de productos en inventario
 			const productEntitiesMap = new Map<number, Product>();
 			for (const p of createSaleDto.products) {
@@ -381,7 +397,11 @@ export class SalesService {
 				const prod = productEntitiesMap.get(p.id)!;
 				const isExempt = Boolean(prod.taxExempt);
 				const vatRate =
-					p.vat_rate !== undefined ? Number(p.vat_rate) : isExempt ? 0 : 19;
+					p.vat_rate !== undefined
+						? Number(p.vat_rate)
+						: isExempt
+							? 0
+							: storeIvaPercentage;
 				const unitPrice = Number(p.unit_price);
 				const lineSubtotal = unitPrice * p.quantity;
 				const vatAmount =
@@ -524,7 +544,10 @@ export class SalesService {
 				store_id: createSaleDto.storeId,
 				user_id: userId,
 				customer_id: createSaleDto.customerId ?? undefined,
-				campaign_id: effectiveBonusRedeemed > 0 ? undefined : (createSaleDto.campaignId ?? undefined),
+				campaign_id:
+					effectiveBonusRedeemed > 0
+						? undefined
+						: (createSaleDto.campaignId ?? undefined),
 				subtotal: subtotalFinal,
 				tax_total: taxTotalFinal,
 				discount_total: promoDiscount,
@@ -595,7 +618,10 @@ export class SalesService {
 							notes: `Redención de bonos aplicada en Venta #${savedSale.id}`,
 						},
 					);
-					await queryRunner.manager.save('bonus_transactions', redeemTransaction);
+					await queryRunner.manager.save(
+						'bonus_transactions',
+						redeemTransaction,
+					);
 				}
 
 				// B. Registrar Ganancia si acumuló bonos
@@ -675,7 +701,9 @@ export class SalesService {
 			.where('rule.id = :campaignId', { campaignId })
 			.andWhere('rule.isActive = true')
 			.andWhere('rule.companyId = :companyId', { companyId })
-			.andWhere('(rule.storeId IS NULL OR rule.storeId = :storeId)', { storeId })
+			.andWhere('(rule.storeId IS NULL OR rule.storeId = :storeId)', {
+				storeId,
+			})
 			.andWhere('(rule.startsAt IS NULL OR rule.startsAt <= :now)', { now })
 			.andWhere('(rule.endsAt IS NULL OR rule.endsAt >= :now)', { now })
 			.getMany();
@@ -700,9 +728,15 @@ export class SalesService {
 						? Math.min(item.quantity, productRule.maxQty)
 						: item.quantity;
 					let earned = 0;
-					if (productRule.discountPercentage != null && Number(productRule.discountPercentage) > 0) {
+					if (
+						productRule.discountPercentage != null &&
+						Number(productRule.discountPercentage) > 0
+					) {
 						earned =
-							(Number(item.unitPrice) * effectiveQty * Number(productRule.discountPercentage)) / 100;
+							(Number(item.unitPrice) *
+								effectiveQty *
+								Number(productRule.discountPercentage)) /
+							100;
 					} else if (productRule.discountValue != null) {
 						earned = Number(productRule.discountValue) * effectiveQty;
 					}
@@ -715,16 +749,23 @@ export class SalesService {
 				// B. Regla por categoría
 				if (item.product.categoryId) {
 					const categoryRule = rule.categories?.find(
-						(rc: any) => Number(rc.categoryId) === Number(item.product.categoryId),
+						(rc: any) =>
+							Number(rc.categoryId) === Number(item.product.categoryId),
 					);
 					if (categoryRule && item.quantity >= (categoryRule.minQty || 1)) {
 						const effectiveQty = categoryRule.maxQty
 							? Math.min(item.quantity, categoryRule.maxQty)
 							: item.quantity;
 						let catEarned = 0;
-						if (categoryRule.discountPercentage != null && Number(categoryRule.discountPercentage) > 0) {
+						if (
+							categoryRule.discountPercentage != null &&
+							Number(categoryRule.discountPercentage) > 0
+						) {
 							catEarned =
-								(Number(item.unitPrice) * effectiveQty * Number(categoryRule.discountPercentage)) / 100;
+								(Number(item.unitPrice) *
+									effectiveQty *
+									Number(categoryRule.discountPercentage)) /
+								100;
 						} else if (categoryRule.discountValue != null) {
 							catEarned = Number(categoryRule.discountValue) * effectiveQty;
 						}

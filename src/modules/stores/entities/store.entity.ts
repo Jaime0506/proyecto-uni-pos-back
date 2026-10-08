@@ -12,6 +12,11 @@ import {
 	Unique,
 } from 'typeorm';
 
+const numericToNumber = {
+	to: (value: number | null) => value,
+	from: (value: string | null) => (value === null ? null : parseFloat(value)),
+};
+
 @Entity({ name: 'stores', schema: 'sys' })
 @Unique('stores_company_name_uk', ['companyId', 'name'])
 export class Store {
@@ -42,6 +47,16 @@ export class Store {
 
 	@Column({ type: 'varchar', length: 255, nullable: true })
 	email: string;
+
+	@Column({
+		name: 'iva_percentage',
+		type: 'numeric',
+		precision: 5,
+		scale: 2,
+		default: 19.0,
+		transformer: numericToNumber,
+	})
+	ivaPercentage: number;
 
 	@CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
 	createdAt: Date;

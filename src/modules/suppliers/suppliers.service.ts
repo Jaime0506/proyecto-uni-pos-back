@@ -4,7 +4,7 @@ import {
 	InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Supplier } from './entities/supplier.entity';
 import { Company } from '../companies/entities/company.entity';
 import { CreateSupplierDto } from './dtos/create-supplier.dto';
@@ -19,14 +19,22 @@ export class SuppliersService {
 		private readonly supplierRepository: Repository<Supplier>,
 		@InjectRepository(Company)
 		private readonly companyRepository: Repository<Company>,
+		private readonly dataSource: DataSource,
 	) {}
 
-	// Obtener todos los proveedores (incluyendo eliminados)
-	async getAllSuppliers() {
+	// Obtener proveedores por compañía (excluyendo eliminados)
+	async getAllSuppliers(companyId?: number) {
 		try {
+			const whereClause: any = {};
+			if (companyId) {
+				whereClause.company = { id: companyId };
+			}
+
 			const suppliers = await this.supplierRepository.find({
-				withDeleted: true,
+				where: whereClause,
+				withDeleted: false,
 				relations: ['company'],
+				order: { id: 'DESC' },
 			});
 
 			return {
@@ -45,7 +53,7 @@ export class SuppliersService {
 	// Crear un nuevo proveedor
 	async createSupplier(dto: CreateSupplierDto) {
 		try {
-			const { companyId, name, contactName, phone, email, address } = dto;
+			const { companyId, name, nit, contactName, phone, email, address } = dto;
 
 			// Verificar si la compañía existe
 			const company = await this.companyRepository.findOne({
@@ -66,6 +74,7 @@ export class SuppliersService {
 			newSupplier.name = name;
 			newSupplier.status = StatusEnum.ACTIVE;
 
+			if (nit !== undefined) newSupplier.nit = nit;
 			if (contactName !== undefined) newSupplier.contactName = contactName;
 			if (phone !== undefined) newSupplier.phone = phone;
 			if (email !== undefined) newSupplier.email = email;
@@ -94,6 +103,7 @@ export class SuppliersService {
 				id,
 				companyId,
 				name,
+				nit,
 				contactName,
 				phone,
 				email,
@@ -130,6 +140,7 @@ export class SuppliersService {
 
 			// Actualizar campos
 			if (name !== undefined) existingSupplier.name = name;
+			if (nit !== undefined) existingSupplier.nit = nit;
 			if (contactName !== undefined) existingSupplier.contactName = contactName;
 			if (phone !== undefined) existingSupplier.phone = phone;
 			if (email !== undefined) existingSupplier.email = email;
@@ -160,7 +171,7 @@ export class SuppliersService {
 		}
 	}
 
-	// Eliminar un proveedor (soft delete)
+	// Eliminar un proveedor (soft delete) validando que no tenga operaciones
 	async deleteSupplier(dto: DeleteSupplierDto) {
 		try {
 			const { id } = dto;
@@ -172,10 +183,41 @@ export class SuppliersService {
 			});
 
 			if (!existingSupplier) {
-				throw new BadRequestException(`El proveedor ${id} no existe`);
+				throw new BadRequestException(
+					`El proveedor ${id} no existe o ya fue eliminado`,
+				);
 			}
 
-			// Eliminar el proveedor (soft delete)
+			// Validar si tiene operaciones asociadas (órdenes de compra)
+			const hasOrders = await this.dataSource
+				.query(
+					`SELECT 1 FROM sys.purchase_orders WHERE supplier_id = $1 AND deleted_at IS NULL LIMIT 1`,
+					[id],
+				)
+				.catch(() => []);
+
+			if (hasOrders && hasOrders.length > 0) {
+				throw new BadRequestException(
+					'No es posible eliminar el proveedor porque registra órdenes de compra asociadas. Puede inactivarlo en su lugar cambiando su estado.',
+				);
+			}
+
+			// Validar si tiene recepciones de mercancía
+			const hasReceptions = await this.dataSource
+				.query(
+					`SELECT 1 FROM sys.supplier_receptions WHERE supplier_id = $1 LIMIT 1`,
+					[id],
+				)
+				.catch(() => []);
+
+			if (hasReceptions && hasReceptions.length > 0) {
+				throw new BadRequestException(
+					'No es posible eliminar el proveedor porque registra recepciones de mercancía históricas. Puede inactivarlo en su lugar cambiando su estado.',
+				);
+			}
+
+			// Eliminar el proveedor (soft delete y marcar inactivo)
+			existingSupplier.status = StatusEnum.DESACTIVE;
 			existingSupplier.deletedAt = new Date();
 			existingSupplier.updatedAt = new Date();
 

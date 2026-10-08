@@ -189,7 +189,9 @@ export class BonificationsService {
 				.where('bt.customer_id = :customerId', { customerId: dto.customerId });
 
 			if (dto.companyId) {
-				query.andWhere('bt.company_id = :companyId', { companyId: dto.companyId });
+				query.andWhere('bt.company_id = :companyId', {
+					companyId: dto.companyId,
+				});
 			}
 
 			if (dto.storeId) {

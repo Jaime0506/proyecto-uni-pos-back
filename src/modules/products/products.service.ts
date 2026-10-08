@@ -2,6 +2,7 @@ import {
 	BadRequestException,
 	Injectable,
 	NotFoundException,
+	Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Product } from './entities/product.entity';
@@ -14,9 +15,12 @@ import { Category } from 'src/modules/categories/entities/category.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { StockMovement } from './entities/stock-movement.entity';
 import { StockEntryDto } from './dto/stock-entry.dto';
+import { CacheService } from '../cache/cache.service';
 
 @Injectable()
 export class ProductsService {
+	private readonly logger = new Logger(ProductsService.name);
+
 	constructor(
 		@InjectRepository(Product)
 		private readonly productRepository: Repository<Product>,
@@ -24,6 +28,7 @@ export class ProductsService {
 		private readonly categoryRepository: Repository<Category>,
 		@InjectRepository(StockMovement)
 		private readonly stockMovementRepository: Repository<StockMovement>,
+		private readonly cacheService: CacheService,
 	) {}
 
 	async getAllProducts(dto: GetAllProductsDto) {
@@ -381,7 +386,7 @@ export class ProductsService {
 		}
 
 		// Ejecución transaccional completa (ACID)
-		return await this.productRepository.manager.transaction(
+		const result = await this.productRepository.manager.transaction(
 			async (transactionalEntityManager) => {
 				// 1. Resolver categorías
 				const categoryNames = [
@@ -393,6 +398,7 @@ export class ProductsService {
 				];
 
 				const categoryCache = new Map<string, Category>();
+				let createdCategoriesCount = 0;
 
 				if (categoryNames.length > 0) {
 					const existingCategories = await transactionalEntityManager
@@ -425,6 +431,7 @@ export class ProductsService {
 							.save(newCategories);
 
 						savedCategories.forEach((cat) => categoryCache.set(cat.name, cat));
+						createdCategoriesCount = savedCategories.length;
 					}
 				}
 
@@ -518,7 +525,10 @@ export class ProductsService {
 								? 'MANUAL_ENTRY'
 								: stockDiff < 0
 									? 'ADJUSTMENT'
-									: 'ADJUSTMENT';
+									: prevSalePrice !== row.salePrice ||
+										  prevPurchasePrice !== row.purchasePrice
+										? 'PRICE_CHANGE'
+										: 'ADJUSTMENT';
 						const movementReason =
 							changeDetails.length > 0
 								? `Carga masiva CSV (Actualización SKU ${row.sku}): ${changeDetails.join(', ')}`
@@ -582,12 +592,33 @@ export class ProductsService {
 
 				return {
 					ok: true,
-					message: `Carga masiva completada exitosamente: ${createdCount} productos creados, ${updatedCount} productos actualizados.`,
+					message: `Carga masiva completada exitosamente: ${createdCount} productos creados, ${updatedCount} productos actualizados.${createdCategoriesCount > 0 ? ` (${createdCategoriesCount} categoría(s) nueva(s) creada(s))` : ''}`,
 					createdCount,
 					updatedCount,
+					createdCategoriesCount,
 				};
 			},
 		);
+
+		// Si se creó al menos una categoría en el proceso de carga CSV, invalidar la caché de categorías
+		if (result.createdCategoriesCount > 0) {
+			try {
+				const deletedKeys = await this.cacheService.invalidate(
+					['categories:all', `categories:all:companyId:${companyId}`],
+					[`categories:all:companyId:${companyId}*`, 'categories:all*'],
+				);
+				this.logger.log(
+					`Caché de categorías invalidada para companyId ${companyId} (${result.createdCategoriesCount} categoría(s) creada(s) en carga CSV). Claves eliminadas: ${deletedKeys.join(', ')}`,
+				);
+			} catch (cacheError) {
+				this.logger.warn(
+					`Error al invalidar caché de categorías para companyId ${companyId}:`,
+					cacheError,
+				);
+			}
+		}
+
+		return result;
 	}
 
 	async updateProduct(dto: UpdateProductDto, userId?: string) {
@@ -599,7 +630,7 @@ export class ProductsService {
 
 		const existingProduct = await this.productRepository.findOne({
 			where: { id: dto.id },
-			relations: ['company'],
+			relations: ['company', 'category'],
 		});
 
 		if (!existingProduct) {
@@ -612,19 +643,117 @@ export class ProductsService {
 		const newStockValue =
 			dto.stock !== undefined ? Number(dto.stock) : previousStock;
 
-		// Si el stock cambió por edición directa, registrar movimiento de ajuste en Kardex
-		if (dto.stock !== undefined && newStockValue !== previousStock) {
-			const diff = newStockValue - previousStock;
+		// Comparar campos para auditoría y trazabilidad en Kardex
+		const changes: string[] = [];
+		let isPriceChange = false;
+
+		const formatCurrency = (val: number) =>
+			new Intl.NumberFormat('es-CO', {
+				style: 'currency',
+				currency: 'COP',
+				maximumFractionDigits: 0,
+			}).format(val);
+
+		// 1. Precios (Compra y Venta)
+		if (
+			dto.purchasePrice !== undefined &&
+			Number(dto.purchasePrice) !== Number(existingProduct.purchasePrice)
+		) {
+			changes.push(
+				`Precio de compra: ${formatCurrency(Number(existingProduct.purchasePrice))} ➔ ${formatCurrency(Number(dto.purchasePrice))}`,
+			);
+			isPriceChange = true;
+		}
+
+		if (
+			dto.salePrice !== undefined &&
+			Number(dto.salePrice) !== Number(existingProduct.salePrice)
+		) {
+			changes.push(
+				`Precio de venta: ${formatCurrency(Number(existingProduct.salePrice))} ➔ ${formatCurrency(Number(dto.salePrice))}`,
+			);
+			isPriceChange = true;
+		}
+
+		// 2. Información general del producto
+		if (dto.name !== undefined && dto.name.trim() !== existingProduct.name) {
+			changes.push(`Nombre: "${existingProduct.name}" ➔ "${dto.name.trim()}"`);
+		}
+
+		if (
+			dto.sku !== undefined &&
+			(dto.sku?.trim() || null) !== (existingProduct.sku || null)
+		) {
+			changes.push(
+				`SKU: "${existingProduct.sku || 'N/A'}" ➔ "${dto.sku?.trim() || 'N/A'}"`,
+			);
+		}
+
+		if (
+			dto.barcode !== undefined &&
+			(dto.barcode?.trim() || null) !== (existingProduct.barcode || null)
+		) {
+			changes.push(
+				`Código barras: "${existingProduct.barcode || 'N/A'}" ➔ "${dto.barcode?.trim() || 'N/A'}"`,
+			);
+		}
+
+		if (
+			dto.taxExempt !== undefined &&
+			Boolean(dto.taxExempt) !== Boolean(existingProduct.taxExempt)
+		) {
+			changes.push(
+				`IVA: ${existingProduct.taxExempt ? 'Exento (0%)' : 'Gravado'} ➔ ${dto.taxExempt ? 'Exento (0%)' : 'Gravado'}`,
+			);
+		}
+
+		if (
+			dto.minStock !== undefined &&
+			Number(dto.minStock) !== Number(existingProduct.minStock)
+		) {
+			changes.push(
+				`Stock mínimo: ${existingProduct.minStock} ➔ ${dto.minStock}`,
+			);
+		}
+
+		if (dto.categoryId !== undefined) {
+			const oldCatId =
+				existingProduct.category?.id || existingProduct.categoryId || null;
+			const newCatId = dto.categoryId ? Number(dto.categoryId) : null;
+			if (oldCatId !== newCatId) {
+				const oldCatName = existingProduct.category?.name;
+				changes.push(
+					`Categoría: ${oldCatName ? `"${oldCatName}"` : `ID ${oldCatId || 'Ninguna'}`} ➔ ID ${newCatId || 'Ninguna'}`,
+				);
+			}
+		}
+
+		// Si el stock cambió o si hubo cualquier modificación de producto (precios, nombre, etc.), registrar en Kardex
+		const stockDiff = newStockValue - previousStock;
+		if (stockDiff !== 0) {
 			const movement = this.stockMovementRepository.create({
 				productId: existingProduct.id,
 				companyId: existingProduct.company?.id || 1,
 				storeId: existingProduct.storeId,
 				userId: userId || undefined,
 				type: 'ADJUSTMENT',
-				quantity: diff,
-				previousStock: previousStock,
+				quantity: stockDiff,
+				previousStock,
 				newStock: newStockValue,
-				reason: 'Ajuste manual de stock desde edición de producto',
+				reason: `Ajuste de stock (${stockDiff > 0 ? '+' : ''}${stockDiff} unids)${changes.length > 0 ? ` | Cambios: ${changes.join(', ')}` : ''}`,
+			});
+			await this.stockMovementRepository.save(movement);
+		} else if (changes.length > 0) {
+			const movement = this.stockMovementRepository.create({
+				productId: existingProduct.id,
+				companyId: existingProduct.company?.id || 1,
+				storeId: existingProduct.storeId,
+				userId: userId || undefined,
+				type: isPriceChange ? 'PRICE_CHANGE' : 'ADJUSTMENT',
+				quantity: 0,
+				previousStock,
+				newStock: previousStock,
+				reason: `Modificación de producto: ${changes.join(', ')}`,
 			});
 			await this.stockMovementRepository.save(movement);
 		}

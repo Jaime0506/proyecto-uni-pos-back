@@ -10,7 +10,6 @@ import {
 	Check,
 	Index,
 } from 'typeorm';
-import { RewardRule } from './reward-rule.entity';
 import { Category } from 'src/modules/categories/entities/category.entity';
 
 const numericToNumber = {

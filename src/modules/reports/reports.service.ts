@@ -6,6 +6,10 @@ import { SaleItem } from '../sales/entities/sale-items.entity';
 import { Product } from '../products/entities/product.entity';
 import { Customer } from '../customers/entities/customer.entity';
 import { User } from 'src/core/users/user.entity';
+import { PurchaseOrder } from '../purchases/entities/purchase-order.entity';
+import { SupplierReception } from '../purchases/entities/supplier-reception.entity';
+import { SupplierReceptionItem } from '../purchases/entities/supplier-reception-item.entity';
+import { Supplier } from '../suppliers/entities/supplier.entity';
 import { GetReportsDto } from './dto/get-reports.dto';
 
 @Injectable()
@@ -21,6 +25,14 @@ export class ReportsService {
 		private readonly customerRepository: Repository<Customer>,
 		@InjectRepository(User)
 		private readonly userRepository: Repository<User>,
+		@InjectRepository(PurchaseOrder)
+		private readonly purchaseOrderRepo: Repository<PurchaseOrder>,
+		@InjectRepository(SupplierReception)
+		private readonly supplierReceptionRepo: Repository<SupplierReception>,
+		@InjectRepository(SupplierReceptionItem)
+		private readonly supplierReceptionItemRepo: Repository<SupplierReceptionItem>,
+		@InjectRepository(Supplier)
+		private readonly supplierRepo: Repository<Supplier>,
 	) {}
 
 	// Utilidad generadora de CSV
@@ -498,6 +510,262 @@ export class ReportsService {
 			'SKU',
 			'Cantidad_Vendida',
 			'Ingresos_Totales',
+		];
+
+		return this.generateCsv(formattedData, headers);
+	}
+
+	// 5. COMPRAS POR PROVEEDOR
+	async getPurchasesReport(dto: GetReportsDto) {
+		const {
+			companyId,
+			storeId,
+			supplierId,
+			startDate,
+			endDate,
+			page = 1,
+			limit = 10,
+		} = dto;
+
+		const query = this.purchaseOrderRepo
+			.createQueryBuilder('po')
+			.leftJoinAndSelect('po.supplier', 'supplier')
+			.leftJoinAndSelect('po.store', 'store')
+			.where('po.companyId = :companyId', { companyId });
+
+		if (storeId) {
+			query.andWhere('po.storeId = :storeId', { storeId });
+		}
+		if (supplierId) {
+			query.andWhere('po.supplierId = :supplierId', { supplierId });
+		}
+		if (startDate) {
+			query.andWhere('po.createdAt >= :startDate', {
+				startDate: new Date(startDate),
+			});
+		}
+		if (endDate) {
+			const end = new Date(endDate);
+			end.setHours(23, 59, 59, 999);
+			query.andWhere('po.createdAt <= :endDate', { endDate: end });
+		}
+
+		query.orderBy('po.createdAt', 'DESC');
+
+		const offset = (page - 1) * limit;
+		query.skip(offset).take(limit);
+
+		const [data, total] = await query.getManyAndCount();
+
+		// Resumen acumulado
+		const totalsQuery = this.purchaseOrderRepo
+			.createQueryBuilder('po')
+			.where('po.companyId = :companyId', { companyId });
+
+		if (storeId) {
+			totalsQuery.andWhere('po.storeId = :storeId', { storeId });
+		}
+		if (supplierId) {
+			totalsQuery.andWhere('po.supplierId = :supplierId', { supplierId });
+		}
+		if (startDate) {
+			totalsQuery.andWhere('po.createdAt >= :startDate', {
+				startDate: new Date(startDate),
+			});
+		}
+		if (endDate) {
+			const end = new Date(endDate);
+			end.setHours(23, 59, 59, 999);
+			totalsQuery.andWhere('po.createdAt <= :endDate', { endDate: end });
+		}
+
+		const sumResult = await totalsQuery
+			.select('SUM(po.total)', 'totalPurchased')
+			.addSelect('SUM(po.subtotal)', 'subtotalPurchased')
+			.addSelect('SUM(po.taxTotal)', 'taxTotalPurchased')
+			.getRawOne<{
+				totalPurchased: number;
+				subtotalPurchased: number;
+				taxTotalPurchased: number;
+			}>();
+
+		return {
+			ok: true,
+			message: 'Reporte de compras generado',
+			data: {
+				result: data,
+				summary: {
+					totalPurchased: Number(sumResult?.totalPurchased || 0),
+					subtotalPurchased: Number(sumResult?.subtotalPurchased || 0),
+					taxTotalPurchased: Number(sumResult?.taxTotalPurchased || 0),
+					totalOrders: total,
+				},
+				pagination: {
+					total,
+					page,
+					limit,
+					totalPages: Math.ceil(total / limit),
+				},
+			},
+		};
+	}
+
+	async exportPurchasesReport(dto: GetReportsDto): Promise<string> {
+		const resultGroup = await this.getPurchasesReport({
+			...dto,
+			page: 1,
+			limit: 99999999,
+		});
+		const data = resultGroup.data.result;
+
+		const formattedData = data.map((order) => ({
+			Fecha: new Date(order.createdAt).toISOString().split('T')[0],
+			Numero_Orden: order.orderNumber,
+			Proveedor: order.supplier ? order.supplier.name : 'N/A',
+			NIT_Proveedor: order.supplier?.nit || 'N/A',
+			Sucursal_ID: order.storeId,
+			Estado: order.status,
+			Subtotal: order.subtotal,
+			Impuestos: order.taxTotal,
+			Total: order.total,
+		}));
+
+		const headers = [
+			'Fecha',
+			'Numero_Orden',
+			'Proveedor',
+			'NIT_Proveedor',
+			'Sucursal_ID',
+			'Estado',
+			'Subtotal',
+			'Impuestos',
+			'Total',
+		];
+
+		return this.generateCsv(formattedData, headers);
+	}
+
+	// 6. PRODUCTOS SUMINISTRADOS POR PROVEEDOR
+	async getSupplierProductsReport(dto: GetReportsDto) {
+		const {
+			companyId,
+			storeId,
+			supplierId,
+			startDate,
+			endDate,
+			page = 1,
+			limit = 10,
+		} = dto;
+
+		const query = this.supplierReceptionItemRepo
+			.createQueryBuilder('item')
+			.innerJoin('item.reception', 'rec')
+			.innerJoin('rec.supplier', 'supplier')
+			.innerJoin('item.product', 'product')
+			.where('rec.companyId = :companyId', { companyId });
+
+		if (storeId) {
+			query.andWhere('rec.storeId = :storeId', { storeId });
+		}
+		if (supplierId) {
+			query.andWhere('rec.supplierId = :supplierId', { supplierId });
+		}
+		if (startDate) {
+			query.andWhere('rec.receptionDate >= :startDate', {
+				startDate: new Date(startDate),
+			});
+		}
+		if (endDate) {
+			const end = new Date(endDate);
+			end.setHours(23, 59, 59, 999);
+			query.andWhere('rec.receptionDate <= :endDate', { endDate: end });
+		}
+
+		query
+			.select('supplier.id', 'supplierId')
+			.addSelect('supplier.name', 'supplierName')
+			.addSelect('supplier.nit', 'supplierNit')
+			.addSelect('product.id', 'productId')
+			.addSelect('product.name', 'productName')
+			.addSelect('product.sku', 'productSku')
+			.addSelect('SUM(item.quantityReceived)', 'totalQuantitySupplied')
+			.addSelect('AVG(item.unitCost)', 'avgUnitCost')
+			.addSelect('SUM(item.lineTotal)', 'totalAmountSupplied')
+			.addSelect('MAX(rec.receptionDate)', 'lastDeliveryDate')
+			.groupBy('supplier.id')
+			.addGroupBy('supplier.name')
+			.addGroupBy('supplier.nit')
+			.addGroupBy('product.id')
+			.addGroupBy('product.name')
+			.addGroupBy('product.sku')
+			.orderBy('"totalAmountSupplied"', 'DESC');
+
+		const rawTotalList = await query.getRawMany();
+		const total = rawTotalList.length;
+
+		const offset = (page - 1) * limit;
+		const paginatedRaw = rawTotalList.slice(offset, offset + limit);
+
+		const result = paginatedRaw.map((row) => ({
+			supplierId: Number(row.supplierId),
+			supplierName: row.supplierName,
+			supplierNit: row.supplierNit || 'N/A',
+			productId: Number(row.productId),
+			productName: row.productName,
+			productSku: row.productSku || 'N/A',
+			totalQuantitySupplied: Number(row.totalQuantitySupplied || 0),
+			avgUnitCost: Number(row.avgUnitCost || 0),
+			totalAmountSupplied: Number(row.totalAmountSupplied || 0),
+			lastDeliveryDate: row.lastDeliveryDate,
+		}));
+
+		return {
+			ok: true,
+			message: 'Reporte de productos suministrados generado',
+			data: {
+				result,
+				pagination: {
+					total,
+					page,
+					limit,
+					totalPages: Math.ceil(total / limit),
+				},
+			},
+		};
+	}
+
+	async exportSupplierProductsReport(dto: GetReportsDto): Promise<string> {
+		const resultGroup = await this.getSupplierProductsReport({
+			...dto,
+			page: 1,
+			limit: 99999999,
+		});
+		const data = resultGroup.data.result;
+
+		const formattedData = data.map((row) => ({
+			Proveedor: row.supplierName,
+			NIT_Proveedor: row.supplierNit,
+			Producto_ID: row.productId,
+			Producto: row.productName,
+			SKU: row.productSku,
+			Cantidad_Suministrada: row.totalQuantitySupplied,
+			Costo_Promedio: row.avgUnitCost.toFixed(2),
+			Total_Comprado: row.totalAmountSupplied.toFixed(2),
+			Ultima_Entrega: row.lastDeliveryDate
+				? new Date(row.lastDeliveryDate).toISOString().split('T')[0]
+				: 'N/A',
+		}));
+
+		const headers = [
+			'Proveedor',
+			'NIT_Proveedor',
+			'Producto_ID',
+			'Producto',
+			'SKU',
+			'Cantidad_Suministrada',
+			'Costo_Promedio',
+			'Total_Comprado',
+			'Ultima_Entrega',
 		];
 
 		return this.generateCsv(formattedData, headers);

@@ -17,7 +17,9 @@ export class UpdateBonificationDto {
 	@IsNumber()
 	total_amount?: number;
 
-	@ApiPropertyOptional({ description: 'Motivo u observaciones del ajuste manual' })
+	@ApiPropertyOptional({
+		description: 'Motivo u observaciones del ajuste manual',
+	})
 	@IsOptional()
 	@IsString()
 	notes?: string;

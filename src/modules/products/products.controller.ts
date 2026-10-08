@@ -59,8 +59,9 @@ export class ProductsController {
 
 	@RequirePermissions(['product:update'])
 	@Patch('update')
-	async updateProduct(@Body() dto: UpdateProductDto) {
-		return this.productsService.updateProduct(dto);
+	async updateProduct(@Body() dto: UpdateProductDto, @Req() req: any) {
+		const userId = req.user?.id || req.user?.sub;
+		return this.productsService.updateProduct(dto, userId);
 	}
 
 	@RequirePermissions(['product:create'])

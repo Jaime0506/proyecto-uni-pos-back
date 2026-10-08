@@ -32,6 +32,8 @@ import {
 	UpdateStoreEmployeeDto,
 	StoreUserActionDto,
 } from './dtos/by-store-user.dto';
+import { AdminResetPasswordDto } from './dtos/admin-reset-password.dto';
+import { RequestUser } from 'src/types/global';
 
 @Injectable()
 export class UserService {
@@ -600,6 +602,7 @@ export class UserService {
 				stores: stores.map((store) => ({
 					id: store.id,
 					name: store.name,
+					ivaPercentage: Number(store.ivaPercentage ?? 19),
 				})),
 			};
 
@@ -1078,6 +1081,18 @@ export class UserService {
 				details: { roleId, companyId: targetCompanyId, storeIds },
 			});
 
+			if (dto.password) {
+				void this.auditService.logAction({
+					userId: id_user,
+					companyId: targetCompanyId,
+					module: 'AUTH',
+					action: 'PASSWORD_RESET',
+					entityName: 'User',
+					entityId: id_user,
+					description: `Contraseña del usuario ${result.username} (${result.firstName} ${result.lastName}) modificada`,
+				});
+			}
+
 			return {
 				ok: true,
 				message: 'Usuario actualizado correctamente',
@@ -1093,6 +1108,46 @@ export class UserService {
 			}
 			throw new InternalServerErrorException('Error al actualizar el usuario');
 		}
+	}
+
+	async adminResetPassword(dto: AdminResetPasswordDto, adminUser: RequestUser) {
+		const user = await this.users.findOne({
+			where: { id: dto.userId },
+			withDeleted: true,
+		});
+
+		if (!user) {
+			throw new NotFoundException('Usuario no encontrado');
+		}
+
+		user.password = await hashPassword(dto.newPassword);
+		user.updatedAt = new Date();
+
+		await this.users.save(user);
+
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId: user.id, isActive: true },
+		});
+
+		void this.auditService.logAction({
+			userId: adminUser.userId,
+			companyId: membership?.companyId ?? null,
+			module: 'AUTH',
+			action: 'PASSWORD_RESET',
+			entityName: 'User',
+			entityId: user.id,
+			description: `Contraseña del usuario ${user.username} (${user.firstName} ${user.lastName}) restablecida por administrador general`,
+			details: {
+				targetUserId: user.id,
+				username: user.username,
+				resetBy: adminUser.username || adminUser.userId,
+			},
+		});
+
+		return {
+			ok: true,
+			message: 'Contraseña restablecida correctamente',
+		};
 	}
 
 	// ========== Sección: Users - Admin de Tienda ==========
@@ -1331,6 +1386,68 @@ export class UserService {
 		}
 
 		return this.updateUserWithRole(dto);
+	}
+
+	async storeResetPassword(dto: AdminResetPasswordDto, adminUser: RequestUser) {
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId: adminUser.userId, isActive: true },
+		});
+
+		if (!membership) {
+			throw new UnauthorizedException(
+				'El administrador no tiene una compañía asignada',
+			);
+		}
+
+		// Validar que el usuario objetivo pertenezca a la misma compañía
+		const targetMembership = await this.userCompanyMembershipRepository.findOne({
+			where: {
+				userId: dto.userId,
+				companyId: membership.companyId,
+				isActive: true,
+			},
+		});
+
+		if (!targetMembership) {
+			throw new UnauthorizedException(
+				'No tienes permisos para restablecer la contraseña de este usuario o no pertenece a tu compañía',
+			);
+		}
+
+		const user = await this.users.findOne({
+			where: { id: dto.userId },
+			withDeleted: true,
+		});
+
+		if (!user) {
+			throw new NotFoundException('Usuario no encontrado');
+		}
+
+		user.password = await hashPassword(dto.newPassword);
+		user.updatedAt = new Date();
+
+		await this.users.save(user);
+
+		void this.auditService.logAction({
+			userId: adminUser.userId,
+			companyId: membership.companyId,
+			module: 'AUTH',
+			action: 'PASSWORD_RESET',
+			entityName: 'User',
+			entityId: user.id,
+			description: `Contraseña del usuario ${user.username} (${user.firstName} ${user.lastName}) restablecida por administrador de empresa`,
+			details: {
+				targetUserId: user.id,
+				username: user.username,
+				companyId: membership.companyId,
+				resetBy: adminUser.username || adminUser.userId,
+			},
+		});
+
+		return {
+			ok: true,
+			message: 'Contraseña restablecida correctamente',
+		};
 	}
 
 	// ========== Sección: Gestión de Empleados por Tienda ==========

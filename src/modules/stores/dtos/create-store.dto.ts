@@ -1,5 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, IsInt, Min } from 'class-validator';
+import {
+	IsNotEmpty,
+	IsOptional,
+	IsString,
+	IsInt,
+	IsNumber,
+	Min,
+	Max,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateStoreDto {
 	@ApiProperty({ description: 'El id de la compañía' })
@@ -32,4 +41,16 @@ export class CreateStoreDto {
 	@IsOptional()
 	// @IsEmail()
 	email?: string;
+
+	@ApiPropertyOptional({
+		description: 'Porcentaje de IVA por defecto de la tienda (0 a 100)',
+		example: 19,
+		default: 19,
+	})
+	@IsOptional()
+	@IsNumber()
+	@Min(0)
+	@Max(100)
+	@Type(() => Number)
+	ivaPercentage?: number;
 }

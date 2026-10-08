@@ -1,7 +1,9 @@
 import {
 	Injectable,
 	BadRequestException,
+	ForbiddenException,
 	InternalServerErrorException,
+	UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,8 +13,9 @@ import { CreateStoreDto } from './dtos/create-store.dto';
 import { UpdateStoreDto } from './dtos/update-store.dto';
 import { DeleteStoreDto } from './dtos/delete-store.dto';
 import { StatusEnum } from 'src/core/status.enum';
-
 import { UserCompanyMembership } from '../users/entities/user-company-membership.entity';
+import { RequestUser } from 'src/types/global';
+import { MyPermissionResolverService } from '../auth/authorization-guard/my-permission-resolver.service';
 
 @Injectable()
 export class StoresService {
@@ -23,16 +26,51 @@ export class StoresService {
 		private readonly companyRepository: Repository<Company>,
 		@InjectRepository(UserCompanyMembership)
 		private readonly userCompanyMembershipRepository: Repository<UserCompanyMembership>,
+		private readonly permissionResolver: MyPermissionResolverService,
 	) {}
 
-	// Obtener tiendas de la compañía del usuario autenticado (activas)
-	async getCompanyStores(userId: string) {
-		try {
-			const membership = await this.userCompanyMembershipRepository.findOne({
-				where: { userId, isActive: true },
-			});
+	/**
+	 * Verifica si el usuario cuenta con permisos administrativos globales sobre tiendas
+	 * (o si es super root) para operar sobre todas las compañías.
+	 */
+	private async isGlobalStoreAdmin(
+		user: RequestUser,
+		action: 'read' | 'create' | 'update' | 'delete' = 'read',
+	): Promise<boolean> {
+		if (user.isSuperRoot) return true;
 
-			if (!membership) {
+		const tenantId = user.companyId ? user.companyId.toString() : null;
+		const permissions = await this.permissionResolver.getUserPermissions(
+			user.userId,
+			tenantId,
+		);
+
+		return (
+			permissions.has(`store_admin:${action}`) ||
+			permissions.has('store_admin:*') ||
+			permissions.has('*')
+		);
+	}
+
+	/**
+	 * Obtiene el ID de la compañía asociada al usuario.
+	 */
+	private async getUserCompanyId(user: RequestUser): Promise<number | null> {
+		if (user.companyId) {
+			return user.companyId;
+		}
+		const membership = await this.userCompanyMembershipRepository.findOne({
+			where: { userId: user.userId, isActive: true },
+		});
+		return membership ? membership.companyId : null;
+	}
+
+	// Obtener tiendas de la compañía del usuario autenticado (activas)
+	async getCompanyStores(user: RequestUser) {
+		try {
+			const companyId = await this.getUserCompanyId(user);
+
+			if (!companyId) {
 				return {
 					ok: true,
 					message: 'El usuario no tiene una compañía asignada',
@@ -42,10 +80,11 @@ export class StoresService {
 
 			const stores = await this.storeRepository.find({
 				where: {
-					company: { id: membership.companyId },
+					company: { id: companyId },
 					status: StatusEnum.ACTIVE,
 				},
 				withDeleted: false,
+				order: { id: 'ASC' },
 			});
 
 			return {
@@ -61,17 +100,48 @@ export class StoresService {
 		}
 	}
 
-	// Obtener todas las tiendas (incluyendo desactivadas)
-	async getAllStores() {
+	// Obtener todas las tiendas (respetando aislamiento por compañía salvo que sea admin global)
+	async getAllStores(user: RequestUser) {
 		try {
+			const isGlobalAdmin = await this.isGlobalStoreAdmin(user, 'read');
+
+			if (isGlobalAdmin) {
+				const stores = await this.storeRepository.find({
+					withDeleted: true,
+					relations: ['company'],
+					order: { id: 'DESC' },
+				});
+
+				return {
+					ok: true,
+					message: 'Tiendas obtenidas correctamente (Vista Global)',
+					data: { result: stores },
+				};
+			}
+
+			// Usuario con permiso de compañía (store:read): restringir estrictamente a su empresa
+			const companyId = await this.getUserCompanyId(user);
+
+			if (!companyId) {
+				return {
+					ok: true,
+					message: 'El usuario no tiene una compañía asignada',
+					data: { result: [] },
+				};
+			}
+
 			const stores = await this.storeRepository.find({
+				where: {
+					company: { id: companyId },
+				},
 				withDeleted: true,
 				relations: ['company'],
+				order: { id: 'DESC' },
 			});
 
 			return {
 				ok: true,
-				message: 'Tiendas obtenidas correctamente',
+				message: 'Tiendas de la compañía obtenidas correctamente',
 				data: { result: stores },
 			};
 		} catch (error) {
@@ -81,26 +151,51 @@ export class StoresService {
 	}
 
 	// Crear una nueva tienda
-	async createStore(dto: CreateStoreDto) {
+	async createStore(dto: CreateStoreDto, user: RequestUser) {
 		try {
-			const { companyId, name, nit, address, phone, email } = dto;
+			const isGlobalAdmin = await this.isGlobalStoreAdmin(user, 'create');
+			let targetCompanyId = dto.companyId;
+
+			if (!isGlobalAdmin) {
+				const userCompanyId = await this.getUserCompanyId(user);
+				if (!userCompanyId) {
+					throw new UnauthorizedException(
+						'El usuario no tiene una compañía asignada',
+					);
+				}
+
+				// Si el usuario no es admin global, se restringe forzosamente a su empresa
+				if (targetCompanyId && targetCompanyId !== userCompanyId) {
+					throw new ForbiddenException(
+						'No tiene permisos para crear tiendas en otra compañía',
+					);
+				}
+
+				targetCompanyId = userCompanyId;
+			}
+
+			if (!targetCompanyId) {
+				throw new BadRequestException('El ID de la compañía es obligatorio');
+			}
+
+			const { name, nit, address, phone, email, ivaPercentage } = dto;
 
 			// Verificar si la compañía existe
 			const company = await this.companyRepository.findOne({
-				where: { id: companyId },
+				where: { id: targetCompanyId },
 				withDeleted: false,
 			});
 
 			if (!company) {
 				throw new BadRequestException(
-					`La compañía con ID ${companyId} no existe o está desactivada`,
+					`La compañía con ID ${targetCompanyId} no existe o está desactivada`,
 				);
 			}
 
 			// Verificar el límite de tiendas de la compañía
 			const activeStoresCount = await this.storeRepository.count({
 				where: {
-					company: { id: companyId },
+					company: { id: targetCompanyId },
 					status: StatusEnum.ACTIVE,
 				},
 				withDeleted: false,
@@ -120,6 +215,10 @@ export class StoresService {
 			if (address !== undefined) newStore.address = address;
 			if (phone !== undefined) newStore.phone = phone;
 			if (email !== undefined) newStore.email = email;
+			newStore.ivaPercentage =
+				ivaPercentage !== undefined && ivaPercentage !== null
+					? Number(ivaPercentage)
+					: 19.0;
 
 			const savedStore = await this.storeRepository.save(newStore);
 
@@ -130,7 +229,11 @@ export class StoresService {
 			};
 		} catch (error) {
 			console.error(error);
-			if (error instanceof BadRequestException) {
+			if (
+				error instanceof BadRequestException ||
+				error instanceof ForbiddenException ||
+				error instanceof UnauthorizedException
+			) {
 				throw error;
 			}
 			throw new InternalServerErrorException('Error al crear la tienda');
@@ -138,9 +241,19 @@ export class StoresService {
 	}
 
 	// Actualizar una tienda
-	async updateStore(dto: UpdateStoreDto) {
+	async updateStore(dto: UpdateStoreDto, user: RequestUser) {
 		try {
-			const { id, companyId, name, nit, address, phone, email, status } = dto;
+			const {
+				id,
+				companyId,
+				name,
+				nit,
+				address,
+				phone,
+				email,
+				status,
+				ivaPercentage,
+			} = dto;
 
 			// Verificar si la tienda existe
 			const existingStore = await this.storeRepository.findOne({
@@ -153,7 +266,24 @@ export class StoresService {
 				throw new BadRequestException(`La tienda ${id} no existe`);
 			}
 
-			// Si se proporciona un companyId diferente, verificar que la nueva compañía exista
+			const isGlobalAdmin = await this.isGlobalStoreAdmin(user, 'update');
+
+			if (!isGlobalAdmin) {
+				const userCompanyId = await this.getUserCompanyId(user);
+				if (!userCompanyId || existingStore.company?.id !== userCompanyId) {
+					throw new ForbiddenException(
+						'No tiene permisos para modificar tiendas de otra compañía',
+					);
+				}
+
+				if (companyId && companyId !== existingStore.company.id) {
+					throw new ForbiddenException(
+						'No tiene permisos para reasignar la tienda a otra compañía',
+					);
+				}
+			}
+
+			// Si se proporciona un companyId diferente (solo permitido a administradores globales)
 			if (companyId && companyId !== existingStore.company.id) {
 				const newCompany = await this.companyRepository.findOne({
 					where: { id: companyId },
@@ -194,6 +324,9 @@ export class StoresService {
 			if (address !== undefined) existingStore.address = address;
 			if (phone !== undefined) existingStore.phone = phone;
 			if (email !== undefined) existingStore.email = email;
+			if (ivaPercentage !== undefined && ivaPercentage !== null) {
+				existingStore.ivaPercentage = Number(ivaPercentage);
+			}
 			existingStore.updatedAt = new Date();
 
 			// Manejar cambio de estado
@@ -217,7 +350,11 @@ export class StoresService {
 			};
 		} catch (error) {
 			console.error(error);
-			if (error instanceof BadRequestException) {
+			if (
+				error instanceof BadRequestException ||
+				error instanceof ForbiddenException ||
+				error instanceof UnauthorizedException
+			) {
 				throw error;
 			}
 			throw new InternalServerErrorException('Error al actualizar la tienda');
@@ -225,18 +362,30 @@ export class StoresService {
 	}
 
 	// Eliminar una tienda (soft delete)
-	async deleteStore(dto: DeleteStoreDto) {
+	async deleteStore(dto: DeleteStoreDto, user: RequestUser) {
 		try {
 			const { id } = dto;
 
 			// Verificar si la tienda existe
 			const existingStore = await this.storeRepository.findOne({
 				where: { id },
+				relations: ['company'],
 				withDeleted: false,
 			});
 
 			if (!existingStore) {
 				throw new BadRequestException(`La tienda ${id} no existe`);
+			}
+
+			const isGlobalAdmin = await this.isGlobalStoreAdmin(user, 'delete');
+
+			if (!isGlobalAdmin) {
+				const userCompanyId = await this.getUserCompanyId(user);
+				if (!userCompanyId || existingStore.company?.id !== userCompanyId) {
+					throw new ForbiddenException(
+						'No tiene permisos para eliminar tiendas de otra compañía',
+					);
+				}
 			}
 
 			// Eliminar la tienda (soft delete)
@@ -253,7 +402,11 @@ export class StoresService {
 			};
 		} catch (error) {
 			console.error(error);
-			if (error instanceof BadRequestException) {
+			if (
+				error instanceof BadRequestException ||
+				error instanceof ForbiddenException ||
+				error instanceof UnauthorizedException
+			) {
 				throw error;
 			}
 			throw new InternalServerErrorException('Error al eliminar la tienda');

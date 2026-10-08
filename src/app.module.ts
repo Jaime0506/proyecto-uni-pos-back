@@ -20,6 +20,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { CustomerPortalModule } from './modules/customer-portal/customer-portal.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { ReturnsModule } from './modules/returns/returns.module';
+import { PurchasesModule } from './modules/purchases/purchases.module';
 
 @Module({
 	imports: [
@@ -43,6 +44,7 @@ import { ReturnsModule } from './modules/returns/returns.module';
 		CategoriesModule,
 		CustomerPortalModule,
 		ReturnsModule,
+		PurchasesModule,
 	],
 })
 export class AppModule {}

@@ -2,38 +2,45 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class UpdateProductDto {
-	@ApiProperty({ example: 25 })
+	@ApiProperty({ example: 25, required: false })
 	@IsOptional()
 	@IsNumber()
 	id?: number;
 
-	@ApiProperty({ example: 'tomate' })
+	@ApiProperty({ example: 'tomate', required: false })
+	@IsOptional()
 	@IsString()
-	name: string;
+	name?: string;
 
-	@ApiProperty({ example: '10001' })
+	@ApiProperty({ example: '10001', required: false })
+	@IsOptional()
 	@IsString()
-	sku: string;
+	sku?: string;
 
-	@ApiProperty({ example: '100001' })
+	@ApiProperty({ example: '100001', required: false })
+	@IsOptional()
 	@IsString()
-	barcode: string;
+	barcode?: string;
 
-	@ApiProperty({ example: 123 })
+	@ApiProperty({ example: 123, required: false })
+	@IsOptional()
 	@IsNumber()
-	purchasePrice: number;
+	purchasePrice?: number;
 
-	@ApiProperty({ example: 66456 })
+	@ApiProperty({ example: 66456, required: false })
+	@IsOptional()
 	@IsNumber()
-	salePrice: number;
+	salePrice?: number;
 
-	@ApiProperty({ example: false })
+	@ApiProperty({ example: false, required: false })
+	@IsOptional()
 	@IsBoolean()
-	taxExempt: boolean;
+	taxExempt?: boolean;
 
-	@ApiProperty({ example: 5 })
+	@ApiProperty({ example: 5, required: false })
+	@IsOptional()
 	@IsNumber()
-	stock: number;
+	stock?: number;
 
 	@ApiProperty({ example: 5, required: false })
 	@IsOptional()
