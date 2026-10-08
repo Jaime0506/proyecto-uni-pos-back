@@ -1,0 +1,74 @@
+// src/auth/auth.controller.ts
+import {
+	Body,
+	Controller,
+	Get,
+	HttpCode,
+	Ip,
+	Post,
+	Req,
+	UseGuards,
+} from '@nestjs/common';
+import type { Request } from 'express';
+import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+import { RefreshDto } from './dto/refresh.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RegisterDto } from './dto/register.dto';
+import { AvailabilityDto } from './dto/availability.dto';
+import { LogoutDto } from './dto/logout.dto';
+import { RequestUser } from 'src/types/global';
+
+@Controller('auth')
+export class AuthController {
+	constructor(private readonly auth: AuthService) {}
+
+	@Post('login')
+	@HttpCode(200)
+	async login(@Body() dto: LoginDto, @Req() req: Request, @Ip() ip: string) {
+		const ua = req.get?.('user-agent') || req.headers['user-agent'];
+		return this.auth.login(
+			dto.username,
+			dto.password,
+			ip,
+			ua,
+			dto.deviceId,
+			dto.companyId,
+		);
+	}
+
+	@Post('register')
+	@HttpCode(200)
+	async register(@Body() dto: RegisterDto) {
+		return this.auth.register(dto);
+	}
+
+	@Post('refresh')
+	@HttpCode(200)
+	async refresh(@Body() dto: RefreshDto) {
+		return this.auth.refresh(dto.refreshToken);
+	}
+
+	@UseGuards(JwtAuthGuard)
+	@Post('logout')
+	@HttpCode(200)
+	async logout(
+		@Req() req: Request & { user: RequestUser },
+		@Body() dto?: LogoutDto,
+	) {
+		return this.auth.logout(req, dto?.reason || 'logout');
+	}
+
+	@UseGuards(JwtAuthGuard)
+	@Get('me')
+	@HttpCode(200)
+	async me(@Req() req: Request & { user: RequestUser }) {
+		return this.auth.me(req.user.userId);
+	}
+
+	@Post('availability')
+	@HttpCode(200)
+	async availability(@Body() dto: AvailabilityDto) {
+		return this.auth.availability(dto);
+	}
+}

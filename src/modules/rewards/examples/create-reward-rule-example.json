@@ -1,0 +1,29 @@
+{
+    "title": "Descuento de Verano 2024",
+    "description": "Promoción especial de verano con descuentos en productos seleccionados",
+    "startsAt": "2024-06-01T00:00:00.000Z",
+    "endsAt": "2024-08-31T23:59:59.999Z",
+    "isActive": true,
+    "companyId": 1,
+    "storeId": 1,
+    "products": [
+        {
+            "productId": 1,
+            "discountValue": 10.50,
+            "minQty": 2,
+            "maxQty": 10
+        },
+        {
+            "productId": 2,
+            "discountValue": 5.00,
+            "minQty": 1,
+            "maxQty": 5
+        },
+        {
+            "productId": 3,
+            "discountValue": 15.75,
+            "minQty": 3,
+            "maxQty": null
+        }
+    ]
+}

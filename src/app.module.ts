@@ -2,17 +2,49 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { typeOrmConfig } from './database/typeorm.config';
 import { ConfigModule } from '@nestjs/config';
-import { AuthModule } from './auth/auth.module';
-import { UserModule } from './user/user.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UsersModule } from './modules/users/users.module';
+import { RedisModule } from './modules/redis/redis.module';
+import { ProductsModule } from './modules/products/products.module';
+import { CompaniesModule } from './modules/companies/companies.module';
+import { StoresModule } from './modules/stores/stores.module';
+import { RewardsModule } from './modules/rewards/rewards.module';
+import { AuthorizationModule } from './modules/authorization/authorization.module';
+import { SalesModule } from './modules/sales/sales.module';
+import { SuppliersModule } from './modules/suppliers/suppliers.module';
+import { CustomersModule } from './modules/customers/customers.module';
+import { BonificationsModule } from './modules/bonifications/bonifications.module';
+import { CacheModule } from './modules/cache/cache.module';
+import { ReportsModule } from './modules/reports/reports.module';
+import { CategoriesModule } from './modules/categories/categories.module';
+import { CustomerPortalModule } from './modules/customer-portal/customer-portal.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { ReturnsModule } from './modules/returns/returns.module';
+import { PurchasesModule } from './modules/purchases/purchases.module';
 
 @Module({
 	imports: [
 		ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
 		TypeOrmModule.forRootAsync(typeOrmConfig),
+		RedisModule,
+		CacheModule,
 		AuthModule,
-		UserModule,
+		UsersModule,
+		AuditModule,
+		ProductsModule,
+		CompaniesModule,
+		StoresModule,
+		RewardsModule,
+		AuthorizationModule,
+		SalesModule,
+		SuppliersModule,
+		BonificationsModule,
+		CustomersModule,
+		ReportsModule,
+		CategoriesModule,
+		CustomerPortalModule,
+		ReturnsModule,
+		PurchasesModule,
 	],
-	controllers: [],
-	providers: [],
 })
 export class AppModule {}

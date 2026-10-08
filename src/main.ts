@@ -6,6 +6,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap() {
 	const app = await NestFactory.create(AppModule);
 
+	// Configure CORS
+	app.enableCors({
+		origin: '*',
+		methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+	});
+
 	const config = new DocumentBuilder()
 		.setTitle('Proyecto Uni Pos')
 		.setDescription('API del proyecto Uni Pos')
