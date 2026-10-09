@@ -2,6 +2,7 @@ import {
 	Injectable,
 	NotFoundException,
 	BadRequestException,
+	ForbiddenException,
 	InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -18,10 +19,12 @@ import { Store } from '../stores/entities/store.entity';
 import { Company } from '../companies/entities/company.entity';
 import { Product } from '../products/entities/product.entity';
 import { StockMovement } from '../products/entities/stock-movement.entity';
+import { UserCompanyMembership } from '../users/entities/user-company-membership.entity';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { GetPurchaseOrdersDto } from './dto/get-purchase-orders.dto';
 import { CreateSupplierReceptionDto } from './dto/create-supplier-reception.dto';
 import { GetReceptionsDto } from './dto/get-receptions.dto';
+import { RequestUser } from 'src/types/global';
 
 @Injectable()
 export class PurchasesService {
@@ -45,8 +48,38 @@ export class PurchasesService {
 		private readonly dataSource: DataSource,
 	) {}
 
+	private async getUserCompanyId(user?: RequestUser): Promise<number | null> {
+		if (!user) return null;
+		if (user.companyId) return user.companyId;
+		const membership = await this.dataSource
+			.getRepository(UserCompanyMembership)
+			.findOne({
+				where: { userId: user.userId, isActive: true },
+			});
+		return membership ? membership.companyId : null;
+	}
+
 	// 1. CREAR PEDIDO DE COMPRA
-	async createPurchaseOrder(dto: CreatePurchaseOrderDto, userId?: string) {
+	async createPurchaseOrder(
+		dto: CreatePurchaseOrderDto,
+		userId?: string,
+		user?: RequestUser,
+	) {
+		if (user && !user.isSuperRoot) {
+			const userCompanyId = await this.getUserCompanyId(user);
+			if (!userCompanyId) {
+				throw new ForbiddenException(
+					'El usuario no tiene una compañía asignada',
+				);
+			}
+			if (dto.companyId && dto.companyId !== userCompanyId) {
+				throw new ForbiddenException(
+					'No tiene permisos para crear pedidos de compra en otra empresa',
+				);
+			}
+			dto.companyId = userCompanyId;
+		}
+
 		const {
 			companyId,
 			storeId,
@@ -71,6 +104,7 @@ export class PurchasesService {
 			this.storeRepo.findOne({ where: { id: storeId }, withDeleted: false }),
 			this.supplierRepo.findOne({
 				where: { id: supplierId },
+				relations: ['company'],
 				withDeleted: false,
 			}),
 		]);
@@ -81,10 +115,16 @@ export class PurchasesService {
 		if (!store) {
 			throw new BadRequestException(`La sucursal con ID ${storeId} no existe`);
 		}
+		if (store.companyId !== companyId) {
+			throw new BadRequestException('La sucursal no pertenece a la empresa');
+		}
 		if (!supplier) {
 			throw new BadRequestException(
 				`El proveedor con ID ${supplierId} no existe`,
 			);
+		}
+		if (supplier.company && supplier.company.id !== companyId) {
+			throw new BadRequestException('El proveedor no pertenece a la empresa');
 		}
 
 		// Validar productos y calcular totales
@@ -183,7 +223,7 @@ export class PurchasesService {
 	}
 
 	// 2. LISTAR PEDIDOS DE COMPRA
-	async getPurchaseOrders(dto: GetPurchaseOrdersDto) {
+	async getPurchaseOrders(dto: GetPurchaseOrdersDto, user?: RequestUser) {
 		const {
 			companyId,
 			storeId,
@@ -195,6 +235,25 @@ export class PurchasesService {
 			limit = 10,
 		} = dto;
 
+		let effectiveCompanyId = companyId;
+		if (user && !user.isSuperRoot) {
+			const userCompanyId = await this.getUserCompanyId(user);
+			if (!userCompanyId) {
+				return {
+					ok: true,
+					message: 'El usuario no tiene una compañía asignada',
+					data: {
+						result: [],
+						total: 0,
+						page,
+						limit,
+						totalPages: 0,
+					},
+				};
+			}
+			effectiveCompanyId = userCompanyId;
+		}
+
 		const query = this.purchaseOrderRepo
 			.createQueryBuilder('order')
 			.leftJoinAndSelect('order.supplier', 'supplier')
@@ -202,8 +261,8 @@ export class PurchasesService {
 			.leftJoinAndSelect('order.items', 'items')
 			.leftJoinAndSelect('items.product', 'product');
 
-		if (companyId) {
-			query.andWhere('order.companyId = :companyId', { companyId });
+		if (effectiveCompanyId) {
+			query.andWhere('order.companyId = :companyId', { companyId: effectiveCompanyId });
 		}
 		if (storeId) {
 			query.andWhere('order.storeId = :storeId', { storeId });
@@ -246,7 +305,7 @@ export class PurchasesService {
 	}
 
 	// 3. CONSULTAR PEDIDO INDIVIDUAL
-	async getPurchaseOrderById(id: number) {
+	async getPurchaseOrderById(id: number, user?: RequestUser) {
 		const order = await this.purchaseOrderRepo.findOne({
 			where: { id },
 			relations: ['supplier', 'store', 'items', 'items.product'],
@@ -258,6 +317,15 @@ export class PurchasesService {
 			);
 		}
 
+		if (user && !user.isSuperRoot) {
+			const userCompanyId = await this.getUserCompanyId(user);
+			if (!userCompanyId || order.companyId !== userCompanyId) {
+				throw new ForbiddenException(
+					'No tiene permiso para acceder a este pedido de compra',
+				);
+			}
+		}
+
 		return {
 			ok: true,
 			data: { result: order },
@@ -265,7 +333,7 @@ export class PurchasesService {
 	}
 
 	// 4. CANCELAR PEDIDO DE COMPRA
-	async cancelPurchaseOrder(id: number) {
+	async cancelPurchaseOrder(id: number, user?: RequestUser) {
 		const order = await this.purchaseOrderRepo.findOne({
 			where: { id },
 			relations: ['items'],
@@ -275,6 +343,15 @@ export class PurchasesService {
 			throw new NotFoundException(
 				`Pedido de compra con ID ${id} no encontrado`,
 			);
+		}
+
+		if (user && !user.isSuperRoot) {
+			const userCompanyId = await this.getUserCompanyId(user);
+			if (!userCompanyId || order.companyId !== userCompanyId) {
+				throw new ForbiddenException(
+					'No tiene permiso para cancelar este pedido de compra',
+				);
+			}
 		}
 
 		if (order.status === PurchaseOrderStatus.COMPLETED) {
@@ -310,7 +387,23 @@ export class PurchasesService {
 	async createSupplierReception(
 		dto: CreateSupplierReceptionDto,
 		userId?: string,
+		user?: RequestUser,
 	) {
+		if (user && !user.isSuperRoot) {
+			const userCompanyId = await this.getUserCompanyId(user);
+			if (!userCompanyId) {
+				throw new ForbiddenException(
+					'El usuario no tiene una compañía asignada',
+				);
+			}
+			if (dto.companyId && dto.companyId !== userCompanyId) {
+				throw new ForbiddenException(
+					'No tiene permisos para registrar recepciones en otra empresa',
+				);
+			}
+			dto.companyId = userCompanyId;
+		}
+
 		const {
 			companyId,
 			storeId,
@@ -330,16 +423,27 @@ export class PurchasesService {
 		return await this.dataSource.transaction(async (manager) => {
 			const supplier = await manager.findOne(Supplier, {
 				where: { id: supplierId },
+				relations: ['company'],
 			});
 			if (!supplier) {
 				throw new BadRequestException(
 					`El proveedor con ID ${supplierId} no existe`,
 				);
 			}
+			if (supplier.company && supplier.company.id !== companyId) {
+				throw new BadRequestException(
+					'El proveedor no pertenece a la empresa',
+				);
+			}
 
 			const store = await manager.findOne(Store, { where: { id: storeId } });
 			if (!store) {
 				throw new BadRequestException(`La tienda con ID ${storeId} no existe`);
+			}
+			if (store.companyId !== companyId) {
+				throw new BadRequestException(
+					'La tienda no pertenece a la empresa',
+				);
 			}
 
 			let purchaseOrder: PurchaseOrder | null = null;
@@ -351,6 +455,11 @@ export class PurchasesService {
 				if (!purchaseOrder) {
 					throw new BadRequestException(
 						`La orden de compra #${purchaseOrderId} no existe`,
+					);
+				}
+				if (purchaseOrder.companyId !== companyId) {
+					throw new BadRequestException(
+						'La orden de compra no pertenece a la empresa',
 					);
 				}
 				if (purchaseOrder.status === PurchaseOrderStatus.CANCELLED) {
@@ -467,7 +576,7 @@ export class PurchasesService {
 	}
 
 	// 6. LISTAR RECEPCIONES DE MERCANCÍA
-	async getSupplierReceptions(dto: GetReceptionsDto) {
+	async getSupplierReceptions(dto: GetReceptionsDto, user?: RequestUser) {
 		const {
 			companyId,
 			storeId,
@@ -478,6 +587,25 @@ export class PurchasesService {
 			limit = 10,
 		} = dto;
 
+		let effectiveCompanyId = companyId;
+		if (user && !user.isSuperRoot) {
+			const userCompanyId = await this.getUserCompanyId(user);
+			if (!userCompanyId) {
+				return {
+					ok: true,
+					message: 'El usuario no tiene una compañía asignada',
+					data: {
+						result: [],
+						total: 0,
+						page,
+						limit,
+						totalPages: 0,
+					},
+				};
+			}
+			effectiveCompanyId = userCompanyId;
+		}
+
 		const query = this.supplierReceptionRepo
 			.createQueryBuilder('rec')
 			.leftJoinAndSelect('rec.supplier', 'supplier')
@@ -486,8 +614,8 @@ export class PurchasesService {
 			.leftJoinAndSelect('rec.items', 'items')
 			.leftJoinAndSelect('items.product', 'product');
 
-		if (companyId) {
-			query.andWhere('rec.companyId = :companyId', { companyId });
+		if (effectiveCompanyId) {
+			query.andWhere('rec.companyId = :companyId', { companyId: effectiveCompanyId });
 		}
 		if (storeId) {
 			query.andWhere('rec.storeId = :storeId', { storeId });
@@ -527,7 +655,7 @@ export class PurchasesService {
 	}
 
 	// 7. CONSULTAR RECEPCIÓN INDIVIDUAL
-	async getSupplierReceptionById(id: number) {
+	async getSupplierReceptionById(id: number, user?: RequestUser) {
 		const reception = await this.supplierReceptionRepo.findOne({
 			where: { id },
 			relations: [
@@ -541,6 +669,15 @@ export class PurchasesService {
 
 		if (!reception) {
 			throw new NotFoundException(`Recepción con ID ${id} no encontrada`);
+		}
+
+		if (user && !user.isSuperRoot) {
+			const userCompanyId = await this.getUserCompanyId(user);
+			if (!userCompanyId || reception.companyId !== userCompanyId) {
+				throw new ForbiddenException(
+					'No tiene permiso para acceder a esta recepción',
+				);
+			}
 		}
 
 		return {

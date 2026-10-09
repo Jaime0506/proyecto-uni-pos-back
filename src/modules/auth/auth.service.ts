@@ -91,7 +91,7 @@ export class AuthService {
 					username: user.username,
 					isSuperRoot: user.isSuperRoot,
 				},
-				{ expiresIn: this.cfg.get('JWT_ACCESS_TTL') || '15m' },
+				{ expiresIn: this.cfg.get('JWT_ACCESS_TTL') || '30m' },
 			);
 
 			// refresh con mismo jti pero TTL largo
@@ -217,7 +217,7 @@ export class AuthService {
 
 		// Requerimiento B3: Validar inactividad también en refresh
 		const idleTimeoutMinutes = Number(
-			this.cfg.get('SESSION_IDLE_TIMEOUT_MINUTES') || 15,
+			this.cfg.get('SESSION_IDLE_TIMEOUT_MINUTES') || 30,
 		);
 		const lastActivity = session.lastSeenAt || session.loginAt;
 		if (lastActivity) {

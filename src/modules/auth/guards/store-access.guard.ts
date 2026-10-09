@@ -39,12 +39,44 @@ export class StoreAccessGuard implements CanActivate {
 			return true;
 		}
 
-		// 1. Verificar si el usuario tiene permiso store:access_all o es admin
 		const userEntity = await this.dataSource.getRepository(User).findOne({
 			where: { id: user.userId },
 		});
 		if (userEntity?.isSuperRoot) return true;
 
+		// 1. Si el usuario tiene asignaciones en sys.user_stores (ej. empleado de tienda),
+		// DEBE estar asignado específicamente a esta tienda con isActive: true
+		const userStoresCount = await this.dataSource
+			.getRepository(UserStore)
+			.count({
+				where: {
+					userId: user.userId,
+					isActive: true,
+				},
+			});
+
+		if (userStoresCount > 0) {
+			const userStore = await this.dataSource.getRepository(UserStore).findOne({
+				where: {
+					userId: user.userId,
+					storeId: storeId,
+					isActive: true,
+				},
+			});
+
+			if (!userStore) {
+				throw new ForbiddenException({
+					message:
+						'No tienes permisos para acceder o gestionar datos de esta tienda',
+					code: 'STORE-ACCESS-DENIED',
+					storeId,
+				});
+			}
+
+			return true;
+		}
+
+		// 2. Si no tiene asignaciones en sys.user_stores, verificar si es administrador global
 		const userRole = await this.dataSource.getRepository(UserRole).findOne({
 			where: {
 				userId: user.userId,
@@ -56,13 +88,7 @@ export class StoreAccessGuard implements CanActivate {
 		});
 
 		if (userRole?.role) {
-			if (
-				userRole.role.name.toLowerCase().includes('admin') ||
-				userRole.role.name.toLowerCase().includes('super')
-			) {
-				return true;
-			}
-
+			// Permiso explícito store:access_all
 			const hasAccessAll = await this.dataSource
 				.getRepository(RolePermission)
 				.findOne({
@@ -79,26 +105,42 @@ export class StoreAccessGuard implements CanActivate {
 				});
 
 			if (hasAccessAll) return true;
+
+			// Permisos de administración de compañía a nivel global
+			const hasCompanyAdmin = await this.dataSource
+				.getRepository(RolePermission)
+				.findOne({
+					where: [
+						{
+							roleId: userRole.role.id,
+							status: StatusEnum.ACTIVE,
+							deletedAt: IsNull(),
+							permission: {
+								name: 'company:read',
+								status: StatusEnum.ACTIVE,
+							},
+						},
+						{
+							roleId: userRole.role.id,
+							status: StatusEnum.ACTIVE,
+							deletedAt: IsNull(),
+							permission: {
+								name: 'company_admin:read',
+								status: StatusEnum.ACTIVE,
+							},
+						},
+					],
+					relations: ['permission'],
+				});
+
+			if (hasCompanyAdmin) return true;
 		}
 
-		// 2. Verificar asignación en sys.user_stores
-		const userStore = await this.dataSource.getRepository(UserStore).findOne({
-			where: {
-				userId: user.userId,
-				storeId: storeId,
-				isActive: true,
-			},
+		throw new ForbiddenException({
+			message:
+				'No tienes permisos para acceder o gestionar datos de esta tienda',
+			code: 'STORE-ACCESS-DENIED',
+			storeId,
 		});
-
-		if (!userStore) {
-			throw new ForbiddenException({
-				message:
-					'No tienes permisos para acceder o gestionar datos de esta tienda',
-				code: 'STORE-ACCESS-DENIED',
-				storeId,
-			});
-		}
-
-		return true;
 	}
 }

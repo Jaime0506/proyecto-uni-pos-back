@@ -11,6 +11,7 @@ import {
 	Req,
 	UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PurchasesService } from './purchases.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
@@ -22,6 +23,7 @@ import {
 	PermissionGuard,
 	RequirePermissions,
 } from '../auth/authorization-guard';
+import { RequestUser } from 'src/types/global';
 
 @ApiTags('Purchases')
 @ApiBearerAuth()
@@ -37,10 +39,10 @@ export class PurchasesController {
 	@ApiOperation({ summary: 'Registrar un nuevo pedido de compra a proveedor' })
 	async createPurchaseOrder(
 		@Body() dto: CreatePurchaseOrderDto,
-		@Req() req: any,
+		@Req() req: Request & { user: RequestUser },
 	) {
-		const userId = req.user?.id || req.user?.sub;
-		return await this.purchasesService.createPurchaseOrder(dto, userId);
+		const userId = req.user?.userId || (req as any).user?.id || (req as any).user?.sub;
+		return await this.purchasesService.createPurchaseOrder(dto, userId, req.user);
 	}
 
 	// 2. LISTAR PEDIDOS DE COMPRA
@@ -50,8 +52,11 @@ export class PurchasesController {
 	@ApiOperation({
 		summary: 'Listar pedidos de compra con filtros y paginación',
 	})
-	async getPurchaseOrders(@Query() dto: GetPurchaseOrdersDto) {
-		return await this.purchasesService.getPurchaseOrders(dto);
+	async getPurchaseOrders(
+		@Query() dto: GetPurchaseOrdersDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.purchasesService.getPurchaseOrders(dto, req.user);
 	}
 
 	// 3. DETALLE DE UN PEDIDO DE COMPRA
@@ -59,8 +64,11 @@ export class PurchasesController {
 	@RequirePermissions(['purchase_order:read'])
 	@HttpCode(200)
 	@ApiOperation({ summary: 'Consultar detalle de un pedido de compra' })
-	async getPurchaseOrderById(@Param('id', ParseIntPipe) id: number) {
-		return await this.purchasesService.getPurchaseOrderById(id);
+	async getPurchaseOrderById(
+		@Param('id', ParseIntPipe) id: number,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.purchasesService.getPurchaseOrderById(id, req.user);
 	}
 
 	// 4. CANCELAR PEDIDO DE COMPRA
@@ -68,8 +76,11 @@ export class PurchasesController {
 	@RequirePermissions(['purchase_order:cancel'])
 	@HttpCode(200)
 	@ApiOperation({ summary: 'Cancelar un pedido de compra no recibido' })
-	async cancelPurchaseOrder(@Param('id', ParseIntPipe) id: number) {
-		return await this.purchasesService.cancelPurchaseOrder(id);
+	async cancelPurchaseOrder(
+		@Param('id', ParseIntPipe) id: number,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.purchasesService.cancelPurchaseOrder(id, req.user);
 	}
 
 	// 5. REGISTRAR RECEPCIÓN DE MERCANCÍA
@@ -81,10 +92,10 @@ export class PurchasesController {
 	})
 	async createSupplierReception(
 		@Body() dto: CreateSupplierReceptionDto,
-		@Req() req: any,
+		@Req() req: Request & { user: RequestUser },
 	) {
-		const userId = req.user?.id || req.user?.sub;
-		return await this.purchasesService.createSupplierReception(dto, userId);
+		const userId = req.user?.userId || (req as any).user?.id || (req as any).user?.sub;
+		return await this.purchasesService.createSupplierReception(dto, userId, req.user);
 	}
 
 	// 6. LISTAR RECEPCIONES DE MERCANCÍA
@@ -92,8 +103,11 @@ export class PurchasesController {
 	@RequirePermissions(['reception:read'])
 	@HttpCode(200)
 	@ApiOperation({ summary: 'Listar recepciones de mercancía' })
-	async getSupplierReceptions(@Query() dto: GetReceptionsDto) {
-		return await this.purchasesService.getSupplierReceptions(dto);
+	async getSupplierReceptions(
+		@Query() dto: GetReceptionsDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.purchasesService.getSupplierReceptions(dto, req.user);
 	}
 
 	// 7. DETALLE DE UNA RECEPCIÓN DE MERCANCÍA
@@ -101,7 +115,10 @@ export class PurchasesController {
 	@RequirePermissions(['reception:read'])
 	@HttpCode(200)
 	@ApiOperation({ summary: 'Consultar detalle de una recepción de mercancía' })
-	async getSupplierReceptionById(@Param('id', ParseIntPipe) id: number) {
-		return await this.purchasesService.getSupplierReceptionById(id);
+	async getSupplierReceptionById(
+		@Param('id', ParseIntPipe) id: number,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.purchasesService.getSupplierReceptionById(id, req.user);
 	}
 }

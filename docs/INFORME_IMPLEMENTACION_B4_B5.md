@@ -4,7 +4,7 @@ Este documento certifica y describe la solución técnica completada en los repo
 
 > **Fecha de Actualización:** Octubre 2026  
 > **Estado de la Suite:** Compilación limpia en ambos proyectos (`0 errores` con TypeScript + Vite + SWC).  
-> **Nota de Configuración:** El cierre por inactividad (**B3**) se encuentra temporalmente calibrado a **1 minuto** (con aviso a los 40s) para facilitar pruebas y demostraciones en vivo.
+> **Nota de Configuración:** El cierre por inactividad (**B3**) se encuentra calibrado a **30 minutos** (con aviso preventivo en el último minuto) según las políticas de seguridad estándar del POS.
 
 ---
 
@@ -12,7 +12,7 @@ Este documento certifica y describe la solución técnica completada en los repo
 
 | Código | Requerimiento de Tesis | Estado Final | Observaciones de Implementación |
 | :---: | :--- | :---: | :--- |
-| **B3** | *"El sistema debe manejar sesiones seguras, incluyendo cierre automático por inactividad y mecanismos de protección frente a accesos no autorizados."* | ✅ **Completado** | • **Front:** Hook `useIdleTimer` (calibrado a 1 min para pruebas) + modal interactivo `IdleTimeoutModal` + refresco transparente en `axiosConfig.ts`.<br>• **Back:** Validación de inactividad (`SESSION_IDLE_TIMEOUT_MINUTES`), kill-switch de usuarios inactivos/revocados en `jwt.strategy.ts` y auditoría en `sys.sessions`. |
+| **B3** | *"El sistema debe manejar sesiones seguras, incluyendo cierre automático por inactividad y mecanismos de protección frente a accesos no autorizados."* | ✅ **Completado** | • **Front:** Hook `useIdleTimer` (calibrado a 30 min con aviso preventivo) + modal interactivo `IdleTimeoutModal` + refresco transparente en `axiosConfig.ts`.<br>• **Back:** Validación de inactividad (`SESSION_IDLE_TIMEOUT_MINUTES=30`), kill-switch de usuarios inactivos/revocados en `jwt.strategy.ts` y auditoría en `sys.sessions`. |
 | **B4** | *"El sistema debe permitir al cliente consultar su historial de compras a través de la interfaz web."* | ✅ **Completado** | Pestaña **"Mis Compras"** en `/bonos-cliente`, respaldada por endpoint público optimizado `GET /customer-portal/purchases`. |
 | **B5** | *"El sistema debe mostrar al cliente el detalle de cada compra realizada, incluyendo productos adquiridos, fecha y monto total."* | ✅ **Completado** | Modal digital [PurchaseDetailModal.tsx](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/pages/customer-portal/PurchaseDetailModal.tsx) con desglose de ítems, precio unitario, subtotal, bonos y total pagado. |
 
@@ -120,12 +120,12 @@ Este documento certifica y describe la solución técnica completada en los repo
 
 ---
 
-## 5. Tabla de Calibración de Tiempos (Pruebas vs. Producción)
+## 5. Tabla de Calibración de Tiempos
 
-| Parámetro | Valor Actual (Fase Pruebas) | Valor Recomendado (Producción) | Archivo de Configuración |
-| :--- | :---: | :---: | :--- |
-| **Tiempo de Inactividad (Frontend)** | `1 minuto` (60.000 ms) | `15 minutos` (900.000 ms) | [PrivateRoutes.tsx:21](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/routes/PrivateRoutes.tsx#L21) |
-| **Aviso Preventivo (Frontend)** | `20 segundos` (20.000 ms) | `60 segundos` (60.000 ms) | [PrivateRoutes.tsx:22](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/routes/PrivateRoutes.tsx#L22) |
-| **Límite de Inactividad (Backend)** | `15 minutos` (default) | `15 minutos` | [jwt.strategy.ts:63](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/auth/strategies/jwt.strategy.ts#L63) (`SESSION_IDLE_TIMEOUT_MINUTES`) |
-| **Expiración de Token Acceso (TTL)** | `30 minutos` | `30 minutos` | `.env` (`JWT_ACCESS_TTL`) |
-| **Expiración de Refresh Token (TTL)** | `7 días` | `7 días` | `.env` (`JWT_REFRESH_TTL`) |
+| Parámetro | Valor Configurado | Archivo de Configuración |
+| :--- | :---: | :--- |
+| **Tiempo de Inactividad (Frontend)** | `30 minutos` (1.800.000 ms) | [PrivateRoutes.tsx:22](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/routes/PrivateRoutes.tsx#L22) |
+| **Aviso Preventivo (Frontend)** | `60 segundos` (60.000 ms) | [PrivateRoutes.tsx:23](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-front/src/routes/PrivateRoutes.tsx#L23) |
+| **Límite de Inactividad (Backend)** | `30 minutos` | [jwt.strategy.ts:65](file:///Users/jaimem/Dev/code/tesis/proyecto-uni-pos-back/src/modules/auth/strategies/jwt.strategy.ts#L65) / `.env` (`SESSION_IDLE_TIMEOUT_MINUTES`) |
+| **Expiración de Token Acceso (TTL)** | `30 minutos` | `.env` (`JWT_ACCESS_TTL`) |
+| **Expiración de Refresh Token (TTL)** | `7 días` | `.env` (`JWT_REFRESH_TTL`) |

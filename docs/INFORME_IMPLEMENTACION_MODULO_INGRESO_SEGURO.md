@@ -4,7 +4,7 @@ Este documento certifica, describe y documenta la arquitectura técnica implemen
 
 > **Fecha de Actualización:** Octubre 2026  
 > **Estado de la Suite:** Compilación limpia en ambos proyectos (`0 errores` con TypeScript + Vite + SWC).  
-> **Calibración Temporal de Pruebas:** El cierre por inactividad (**B3**) se encuentra temporalmente configurado a **1 minuto** (con aviso a los 40s) en el frontend para agilizar pruebas y demostraciones en vivo.
+> **Nota de Configuración:** El cierre por inactividad (**B3**) se encuentra calibrado a **30 minutos** (con aviso preventivo en el último minuto) según las políticas de seguridad estándar del POS.
 
 ---
 

@@ -62,7 +62,7 @@ export class JwtStrategy extends PassportStrategy(JwtStrategyBase) {
 
 		// Requerimiento B3: Cierre automático por inactividad (Idle Timeout)
 		const idleTimeoutMinutes = Number(
-			this.configService.get('SESSION_IDLE_TIMEOUT_MINUTES') || 15,
+			this.configService.get('SESSION_IDLE_TIMEOUT_MINUTES') || 30,
 		);
 		const lastActivity = session.lastSeenAt || session.loginAt;
 		if (lastActivity) {

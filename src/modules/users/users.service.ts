@@ -469,13 +469,27 @@ export class UserService {
 		};
 	}
 
-	// Helper: Determina si el usuario tiene permiso store:access_all o rol de administración
+	// Helper: Determina si el usuario tiene permiso store:access_all o rol de administración global
 	async userHasStoreAccessAll(
 		userId: string,
 		companyId?: number,
 	): Promise<boolean> {
 		const user = await this.users.findOne({ where: { id: userId } });
 		if (user?.isSuperRoot) return true;
+
+		// Si el usuario tiene tiendas asignadas explícitamente en user_stores (ej. empleado de tienda),
+		// su ámbito de acceso está estrictamente acotado a dichas tiendas y NO tiene acceso global a todas
+		const assignedStoresCount = await this.userStoreRepository.count({
+			where: {
+				userId,
+				isActive: true,
+				...(companyId ? { companyId } : {}),
+			},
+		});
+
+		if (assignedStoresCount > 0) {
+			return false;
+		}
 
 		const userRole = await this.userRoleRepository.findOne({
 			where: {
@@ -490,12 +504,6 @@ export class UserService {
 
 		if (!userRole || !userRole.role) return false;
 
-		// Si el nombre del rol es administrador o super, tiene acceso global
-		const roleNameLower = userRole.role.name.toLowerCase();
-		if (roleNameLower.includes('admin') || roleNameLower.includes('super')) {
-			return true;
-		}
-
 		// Verificar si tiene el permiso store:access_all
 		const hasAll = await this.dataSource.getRepository(RolePermission).findOne({
 			where: {
@@ -507,7 +515,30 @@ export class UserService {
 			relations: ['permission'],
 		});
 
-		return !!hasAll;
+		if (hasAll) return true;
+
+		// Verificar si tiene permisos de administración de compañía a nivel global
+		const hasCompanyAdminPerm = await this.dataSource.getRepository(RolePermission).findOne({
+			where: [
+				{
+					roleId: userRole.role.id,
+					status: StatusEnum.ACTIVE,
+					deletedAt: IsNull(),
+					permission: { name: 'company:read', status: StatusEnum.ACTIVE },
+				},
+				{
+					roleId: userRole.role.id,
+					status: StatusEnum.ACTIVE,
+					deletedAt: IsNull(),
+					permission: { name: 'company_admin:read', status: StatusEnum.ACTIVE },
+				},
+			],
+			relations: ['permission'],
+		});
+
+		if (hasCompanyAdminPerm) return true;
+
+		return false;
 	}
 
 	// Helper: Determina si el usuario tiene acceso a una tienda específica
@@ -524,19 +555,30 @@ export class UserService {
 		});
 		if (!store) return false;
 
-		const hasAll = await this.userHasStoreAccessAll(userId, store.companyId);
-		if (hasAll) return true;
-
-		const userStore = await this.userStoreRepository.findOne({
+		// Si el usuario tiene tiendas asignadas específicamente en user_stores para esta compañía:
+		const assignedStoresCount = await this.userStoreRepository.count({
 			where: {
 				userId,
-				storeId,
 				companyId: store.companyId,
 				isActive: true,
 			},
 		});
 
-		return !!userStore;
+		if (assignedStoresCount > 0) {
+			const userStore = await this.userStoreRepository.findOne({
+				where: {
+					userId,
+					storeId,
+					companyId: store.companyId,
+					isActive: true,
+				},
+			});
+			return !!userStore;
+		}
+
+		// Si no tiene asignaciones específicas en user_stores, verificar acceso global
+		const hasAll = await this.userHasStoreAccessAll(userId, store.companyId);
+		return hasAll;
 	}
 
 	async getUserCompanyAndStores(userId: string) {
@@ -563,34 +605,39 @@ export class UserService {
 
 			const company = membership.company;
 
-			// Verificar si tiene acceso total a tiendas o solo a las asignadas
-			const hasAccessAll = await this.userHasStoreAccessAll(userId, company.id);
+			// Verificar si el usuario tiene tiendas asignadas explícitamente en user_stores
+			const userStores = await this.userStoreRepository.find({
+				where: {
+					userId,
+					companyId: company.id,
+					isActive: true,
+				},
+				relations: ['store'],
+			});
 
 			let stores: Store[] = [];
-			if (hasAccessAll) {
-				stores = await this.storeRepository.find({
-					where: {
-						company: { id: company.id },
-						status: StatusEnum.ACTIVE,
-					},
-					withDeleted: false,
-				});
-			} else {
-				const userStores = await this.userStoreRepository.find({
-					where: {
-						userId,
-						companyId: company.id,
-						isActive: true,
-					},
-					relations: ['store'],
-				});
 
+			if (userStores.length > 0) {
+				// Si tiene tiendas asignadas explícitamente (ej. empleado de tienda),
+				// SOLO puede ver y acceder a esas tiendas específicas asignadas
 				stores = userStores
 					.map((us) => us.store)
 					.filter(
 						(st) =>
 							st && st.status === StatusEnum.ACTIVE && st.deletedAt === null,
 					);
+			} else {
+				// Si no tiene tiendas asignadas en user_stores, verificar si es administrador global o super root
+				const hasAccessAll = await this.userHasStoreAccessAll(userId, company.id);
+				if (hasAccessAll) {
+					stores = await this.storeRepository.find({
+						where: {
+							company: { id: company.id },
+							status: StatusEnum.ACTIVE,
+						},
+						withDeleted: false,
+					});
+				}
 			}
 
 			// Formatear la respuesta con solo id y nombre
