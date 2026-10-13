@@ -7,8 +7,10 @@ import {
 	Patch,
 	Post,
 	Query,
+	Req,
 	UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { SuppliersService } from './suppliers.service';
 import { CreateSupplierDto } from './dtos/create-supplier.dto';
 import { UpdateSupplierDto } from './dtos/update-supplier.dto';
@@ -19,6 +21,7 @@ import {
 	PermissionGuard,
 	RequirePermissions,
 } from '../auth/authorization-guard';
+import { RequestUser } from 'src/types/global';
 
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
@@ -26,13 +29,17 @@ import {
 export class SuppliersController {
 	constructor(private readonly suppliersService: SuppliersService) {}
 
-	// Obtener todos los proveedores por compañía (o todos si es admin)
+	// Obtener todos los proveedores por compañía (aislado por compañía salvo superRoot)
 	@Get('get-all')
 	@UseGuards(PermissionGuard)
 	@RequirePermissions(['supplier:read'])
 	@HttpCode(200)
-	async getAllSuppliers(@Query('companyId') companyId?: string) {
+	async getAllSuppliers(
+		@Req() req: Request & { user: RequestUser },
+		@Query('companyId') companyId?: string,
+	) {
 		return await this.suppliersService.getAllSuppliers(
+			req.user,
 			companyId ? Number(companyId) : undefined,
 		);
 	}
@@ -42,8 +49,11 @@ export class SuppliersController {
 	@UseGuards(PermissionGuard)
 	@RequirePermissions(['supplier:create'])
 	@HttpCode(200)
-	async createSupplier(@Body() dto: CreateSupplierDto) {
-		return await this.suppliersService.createSupplier(dto);
+	async createSupplier(
+		@Body() dto: CreateSupplierDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.suppliersService.createSupplier(dto, req.user);
 	}
 
 	// Actualizar un proveedor
@@ -51,8 +61,11 @@ export class SuppliersController {
 	@UseGuards(PermissionGuard)
 	@RequirePermissions(['supplier:update'])
 	@HttpCode(200)
-	async updateSupplier(@Body() dto: UpdateSupplierDto) {
-		return await this.suppliersService.updateSupplier(dto);
+	async updateSupplier(
+		@Body() dto: UpdateSupplierDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.suppliersService.updateSupplier(dto, req.user);
 	}
 
 	// Eliminar un proveedor (soft delete)
@@ -60,7 +73,10 @@ export class SuppliersController {
 	@UseGuards(PermissionGuard)
 	@RequirePermissions(['supplier:delete'])
 	@HttpCode(200)
-	async deleteSupplier(@Body() dto: DeleteSupplierDto) {
-		return await this.suppliersService.deleteSupplier(dto);
+	async deleteSupplier(
+		@Body() dto: DeleteSupplierDto,
+		@Req() req: Request & { user: RequestUser },
+	) {
+		return await this.suppliersService.deleteSupplier(dto, req.user);
 	}
 }

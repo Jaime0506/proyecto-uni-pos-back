@@ -1,16 +1,19 @@
 import {
 	Injectable,
 	BadRequestException,
+	ForbiddenException,
 	InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Supplier } from './entities/supplier.entity';
 import { Company } from '../companies/entities/company.entity';
+import { UserCompanyMembership } from '../users/entities/user-company-membership.entity';
 import { CreateSupplierDto } from './dtos/create-supplier.dto';
 import { UpdateSupplierDto } from './dtos/update-supplier.dto';
 import { DeleteSupplierDto } from './dtos/delete-supplier.dto';
 import { StatusEnum } from 'src/core/status.enum';
+import { RequestUser } from 'src/types/global';
 
 @Injectable()
 export class SuppliersService {
@@ -22,11 +25,34 @@ export class SuppliersService {
 		private readonly dataSource: DataSource,
 	) {}
 
-	// Obtener proveedores por compañía (excluyendo eliminados)
-	async getAllSuppliers(companyId?: number) {
+	private async getUserCompanyId(user?: RequestUser): Promise<number | null> {
+		if (!user) return null;
+		if (user.companyId) return user.companyId;
+		const membership = await this.dataSource
+			.getRepository(UserCompanyMembership)
+			.findOne({
+				where: { userId: user.userId, isActive: true },
+			});
+		return membership ? membership.companyId : null;
+	}
+
+	// Obtener proveedores por compañía (excluyendo eliminados y aislando por empresa)
+	async getAllSuppliers(user?: RequestUser, companyId?: number) {
 		try {
 			const whereClause: any = {};
-			if (companyId) {
+
+			if (user && !user.isSuperRoot) {
+				const userCompanyId = await this.getUserCompanyId(user);
+				if (!userCompanyId) {
+					return {
+						ok: true,
+						message: 'El usuario no tiene una compañía asignada',
+						data: { result: [] },
+					};
+				}
+				// Aislamiento estricto por compañía del usuario autenticado
+				whereClause.company = { id: userCompanyId };
+			} else if (companyId) {
 				whereClause.company = { id: companyId };
 			}
 
@@ -51,9 +77,18 @@ export class SuppliersService {
 	}
 
 	// Crear un nuevo proveedor
-	async createSupplier(dto: CreateSupplierDto) {
+	async createSupplier(dto: CreateSupplierDto, user?: RequestUser) {
 		try {
-			const { companyId, name, nit, contactName, phone, email, address } = dto;
+			let { companyId } = dto;
+			const { name, nit, contactName, phone, email, address } = dto;
+
+			if (user && !user.isSuperRoot) {
+				const userCompanyId = await this.getUserCompanyId(user);
+				if (!userCompanyId) {
+					throw new BadRequestException('El usuario no tiene una compañía asignada');
+				}
+				companyId = userCompanyId;
+			}
 
 			// Verificar si la compañía existe
 			const company = await this.companyRepository.findOne({
@@ -97,11 +132,10 @@ export class SuppliersService {
 	}
 
 	// Actualizar un proveedor
-	async updateSupplier(dto: UpdateSupplierDto) {
+	async updateSupplier(dto: UpdateSupplierDto, user?: RequestUser) {
 		try {
 			const {
 				id,
-				companyId,
 				name,
 				nit,
 				contactName,
@@ -110,6 +144,7 @@ export class SuppliersService {
 				address,
 				status,
 			} = dto;
+			let { companyId } = dto;
 
 			// Verificar si el proveedor existe
 			const existingSupplier = await this.supplierRepository.findOne({
@@ -122,7 +157,15 @@ export class SuppliersService {
 				throw new BadRequestException(`El proveedor ${id} no existe`);
 			}
 
-			// Si se proporciona un companyId diferente, verificar que la nueva compañía exista
+			if (user && !user.isSuperRoot) {
+				const userCompanyId = await this.getUserCompanyId(user);
+				if (!userCompanyId || existingSupplier.company?.id !== userCompanyId) {
+					throw new ForbiddenException('No tienes permisos para modificar proveedores de otra compañía');
+				}
+				companyId = userCompanyId;
+			}
+
+			// Si se proporciona un companyId diferente y es superRoot
 			if (companyId && companyId !== existingSupplier.company.id) {
 				const newCompany = await this.companyRepository.findOne({
 					where: { id: companyId },
@@ -162,7 +205,7 @@ export class SuppliersService {
 			};
 		} catch (error) {
 			console.error(error);
-			if (error instanceof BadRequestException) {
+			if (error instanceof BadRequestException || error instanceof ForbiddenException) {
 				throw error;
 			}
 			throw new InternalServerErrorException(
@@ -172,13 +215,14 @@ export class SuppliersService {
 	}
 
 	// Eliminar un proveedor (soft delete) validando que no tenga operaciones
-	async deleteSupplier(dto: DeleteSupplierDto) {
+	async deleteSupplier(dto: DeleteSupplierDto, user?: RequestUser) {
 		try {
 			const { id } = dto;
 
 			// Verificar si el proveedor existe
 			const existingSupplier = await this.supplierRepository.findOne({
 				where: { id },
+				relations: ['company'],
 				withDeleted: false,
 			});
 
@@ -186,6 +230,13 @@ export class SuppliersService {
 				throw new BadRequestException(
 					`El proveedor ${id} no existe o ya fue eliminado`,
 				);
+			}
+
+			if (user && !user.isSuperRoot) {
+				const userCompanyId = await this.getUserCompanyId(user);
+				if (!userCompanyId || existingSupplier.company?.id !== userCompanyId) {
+					throw new ForbiddenException('No tienes permisos para eliminar proveedores de otra compañía');
+				}
 			}
 
 			// Validar si tiene operaciones asociadas (órdenes de compra)
@@ -231,7 +282,7 @@ export class SuppliersService {
 			};
 		} catch (error) {
 			console.error(error);
-			if (error instanceof BadRequestException) {
+			if (error instanceof BadRequestException || error instanceof ForbiddenException) {
 				throw error;
 			}
 			throw new InternalServerErrorException('Error al eliminar el proveedor');
